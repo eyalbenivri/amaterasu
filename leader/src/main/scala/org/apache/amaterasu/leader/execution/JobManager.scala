@@ -62,6 +62,7 @@ class JobManager extends Logging {
   def outOfActions: Boolean = !registeredActions.values.exists(a => a.data.status == ActionStatus.pending ||
     a.data.status == ActionStatus.queued ||
     a.data.status == ActionStatus.started)
+
   /**
     * getNextActionData returns the data of the next action to be executed if such action
     * exists
@@ -160,6 +161,10 @@ class JobManager extends Logging {
     val action = registeredActions.get(actionId).get
     action.announceStart
 
+  }
+
+  def actionsCount(): Int = {
+    executionQueue.size()
   }
 }
 

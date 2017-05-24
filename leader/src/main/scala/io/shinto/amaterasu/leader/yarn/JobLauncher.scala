@@ -52,8 +52,6 @@ object JobLauncher extends App with Logging {
   }
 
   def execute(arguments: Args, config: ClusterConfig, resume: Boolean): Unit = {
-    val jarPath = new Path(arguments.jarPath)
-
     // Create YARN Client
     val conf = new YarnConfiguration()
     val client = YarnClient.createYarnClient()
@@ -70,9 +68,18 @@ object JobLauncher extends App with Logging {
       "io.shinto.amaterasu.leader.yarn.ApplicationMaster " + arguments.toCmdString()
     ))
 
-    // Setup jar for ApplicationMaster
+    // Setup jars on hdfs
     val fs = FileSystem.get(conf)
-    val jarStat = fs.getFileStatus(jarPath)
+    val jarPath = new Path(arguments.jarPath)
+    val jarPathQualified = fs.makeQualified(jarPath)
+
+    if (!fs.exists(jarPathQualified)) {
+      fs.mkdirs(jarPathQualified)
+      // TODO: copy files to HDFS
+      //fs.copyFromLocalFile(false, true, )
+    }
+
+    val jarStat = fs.getFileStatus(Path.mergePaths(jarPathQualified, new Path("bin/leader-0.2.0-all.jar")))
     val appMasterJar = Records.newRecord(classOf[LocalResource])
     appMasterJar.setResource(ConverterUtils.getYarnUrlFromPath(jarPath))
     appMasterJar.setSize(jarStat.getLen)
