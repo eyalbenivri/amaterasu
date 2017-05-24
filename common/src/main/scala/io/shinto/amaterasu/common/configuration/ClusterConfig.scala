@@ -23,6 +23,7 @@ class ClusterConfig extends Logging {
   // the additionalClassPath is currently for testing purposes, when amaterasu is
   // not packaged, there is a need to load the spark-assembly jar
   var additionalClassPath: String = ""
+  var yarnQueue: String = "default"
 
   //this should be a filesystem path that is reachable by all executors (HDFS, S3, local)
 
@@ -114,6 +115,7 @@ class ClusterConfig extends Logging {
     if (props.containsKey("master")) master = props.getProperty("master")
     if (props.containsKey("masterPort")) masterPort = props.getProperty("masterPort")
     if (props.containsKey("timeout")) timeout = props.getProperty("timeout").asInstanceOf[Double]
+    if (props.containsKey("yarn.queue")) yarnQueue = props.getProperty("yarn.queue")
     if (props.containsKey("workingFolder")) {
       workingFolder = props.getProperty("workingFolder")
     }
@@ -147,6 +149,12 @@ object ClusterConfig {
     val config = new ClusterConfig()
     config.load(file)
 
+    config
+  }
+
+  def apply(): ClusterConfig = {
+    val config = new ClusterConfig()
+    config.load()
     config
   }
 
