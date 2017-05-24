@@ -45,7 +45,7 @@ object Args {
       opt[String]('h', "home") action { (x, c) =>
         c.copy(home = x)
       } text "The level of reporting"
-      opt[String]('j', "jarPath") action { (x, c) =>
+      opt[String]('j', "jar-path") action { (x, c) =>
         c.copy(jarPath = x)
       } text "The path to the executable jar"
     }

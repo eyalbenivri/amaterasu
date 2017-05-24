@@ -68,6 +68,10 @@ case $i in
     REPORT="${i#*=}"
     shift # past argument=value
     ;;
+    -j=*|--jar-path=*)
+    JARPATH="${i#*=}"
+    shift # past argument=value
+    ;;
     --default)
     DEFAULT=YES
     shift # past argument with no value
@@ -79,7 +83,7 @@ esac
 done
 
 echo "repo: ${REPO} "
-CMD="java -cp ${BASEDIR}/bin/*.jar -Djava.library.path=/usr/lib io.shinto.amaterasu.leader.yarn.JobLauncher --home ${BASEDIR}" #--repo "https://github.com/roadan/amaterasu-job-sample.git" --branch master
+CMD="java -cp ${BASEDIR}/bin/*.jar -Djava.library.path=/usr/lib io.shinto.amaterasu.leader.yarn.JobLauncher --home ${BASEDIR} " #--repo "https://github.com/roadan/amaterasu-job-sample.git" --branch master
 
 if [ -n "$REPO" ]; then
     CMD+=" --repo ${REPO}"
@@ -103,6 +107,10 @@ fi
 
 if [ -n "$REPORT" ]; then
     CMD+=" --report ${REPORT}"
+fi
+
+if [ -n "$JARPATH" ]; then
+    CMD+=" --jar-path ${JARPATH}"
 fi
 
 echo $CMD
