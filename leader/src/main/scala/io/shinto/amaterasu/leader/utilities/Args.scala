@@ -14,7 +14,7 @@ case class Args(
                  jarPath: String = ""
                ) {
   def toCmdString: String = {
-    s""" --repo $repo --branch $branch --env $env --name $name --jobId $jobId --report $report --home $home"""
+    s""" --repo $repo --branch $branch --env $env --name $name --jobId $jobId --report $report --home $home --jar-path $jarPath"""
   }
 
 }
@@ -27,24 +27,31 @@ object Args {
       opt[String]('r', "repo") action { (x, c) =>
         c.copy(repo = x)
       } text "The git repo containing the job"
+
       opt[String]('b', "branch") action { (x, c) =>
         c.copy(branch = x)
       } text "The branch to be executed (default is master)"
+
       opt[String]('e', "env") action { (x, c) =>
         c.copy(env = x)
       } text "The environment to be executed (test, prod, etc. values from the default env are taken if np env specified)"
+
       opt[String]('n', "name") action { (x, c) =>
         c.copy(name = x)
       } text "The name of the job"
+
       opt[String]('i', "job-id") action { (x, c) =>
         c.copy(jobId = x)
       } text "The jobId - should be passed only when resuming a job"
+
       opt[String]('r', "report") action { (x, c) =>
         c.copy(report = x)
-      }
+      }  text "The level of reporting"
+
       opt[String]('h', "home") action { (x, c) =>
         c.copy(home = x)
-      } text "The level of reporting"
+      }
+
       opt[String]('j', "jar-path") action { (x, c) =>
         c.copy(jarPath = x)
       } text "The path to the executable jar"

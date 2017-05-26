@@ -11,8 +11,7 @@ import io.shinto.amaterasu.common.execution.actions.NotificationLevel.Notificati
 import io.shinto.amaterasu.common.logging.Logging
 import io.shinto.amaterasu.enums.ActionStatus.ActionStatus
 import io.shinto.amaterasu.leader.execution.{JobLoader, JobManager}
-import io.shinto.amaterasu.leader.utilities.Args
-import io.shinto.amaterasu.leader.yarn.ApplicationMaster.log
+import io.shinto.amaterasu.leader.utilities.{Args, BaseJobLauncher}
 import org.apache.curator.framework.CuratorFramework
 import org.apache.hadoop.fs.{FileStatus, FileSystem, Path}
 import org.apache.hadoop.yarn.api.records._
@@ -28,7 +27,7 @@ import scala.collection.concurrent
   * Created by eyalbenivri on 26/04/2017.
   */
 
-class ApplicationMaster {
+class ApplicationMaster extends Logging {
   private var jobManager: JobManager = null
   private var client: CuratorFramework = null
   private var config: ClusterConfig = null
@@ -66,7 +65,7 @@ class ApplicationMaster {
     var jarStat2:FileStatus = null
     try {
       jarStat2 = fs.getFileStatus(jarPathQualified)
-      log.info("JAR path in HDFS is " + jarStat2.getPath())
+      log.info("JAR path in HDFS is " + jarStat2.getPath)
     } catch {
       case e: IOException =>
         log.warn("JAR was not found in Path")
@@ -166,20 +165,10 @@ class ApplicationMaster {
   }
 }
 
-object ApplicationMaster extends App with Logging  {
+object ApplicationMaster extends BaseJobLauncher  {
 
-  val parser = Args.getParser
-
-  def execute(arguments: Args, config: ClusterConfig, resume: Boolean) = {
+  override def run(arguments: Args, config: ClusterConfig, resume: Boolean) = {
     val appMaster = new ApplicationMaster()
     appMaster.execute(arguments, config)
-  }
-
-  parser.parse(args, Args()) match {
-    case Some(arguments: Args) =>
-      val config = ClusterConfig()
-      val resume = arguments.jobId != null
-      execute(arguments, config, resume)
-    case None =>
   }
 }
