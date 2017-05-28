@@ -23,9 +23,41 @@ class ClusterConfig extends Logging {
   // the additionalClassPath is currently for testing purposes, when amaterasu is
   // not packaged, there is a need to load the spark-assembly jar
   var additionalClassPath: String = ""
-  var yarnQueue: String = "default"
 
   //this should be a filesystem path that is reachable by all executors (HDFS, S3, local)
+
+  object YARN {
+    var queue:String = "default"
+    var hdfsJarsPath: String = ""
+
+    def load(props: Properties): Unit = {
+      if(props.containsKey("yarn.queue")) YARN.queue = props.getProperty("yarn.queue")
+      if(props.containsKey("yarn.jarspath")) YARN.hdfsJarsPath = props.getProperty("yarn.jarspath")
+
+      Master.load(props)
+    }
+
+    object Master {
+      var cores:Int = 1
+      var memoryMB:Int = 256
+
+      def load(props: Properties): Unit = {
+        if(props.containsKey("yarn.master.cores")) Master.cores = props.getProperty("yarn.master.cores").asInstanceOf[Int]
+        if(props.containsKey("yarn.master.memoryMB")) Master.memoryMB = props.getProperty("yarn.master.memoryMB").asInstanceOf[Int]
+      }
+    }
+
+    object Worker {
+      var cores:Int = 1
+      var memoryMB:Int = 256
+
+      def load(props: Properties): Unit = {
+        if(props.containsKey("yarn.worker.cores")) Master.cores = props.getProperty("yarn.worker.cores").asInstanceOf[Int]
+        if(props.containsKey("yarn.worker.memoryMB")) Master.memoryMB = props.getProperty("yarn.worker.memoryMB").asInstanceOf[Int]
+      }
+    }
+
+  }
 
   object Webserver {
     var Port: String = ""
@@ -115,7 +147,6 @@ class ClusterConfig extends Logging {
     if (props.containsKey("master")) master = props.getProperty("master")
     if (props.containsKey("masterPort")) masterPort = props.getProperty("masterPort")
     if (props.containsKey("timeout")) timeout = props.getProperty("timeout").asInstanceOf[Double]
-    if (props.containsKey("yarn.queue")) yarnQueue = props.getProperty("yarn.queue")
     if (props.containsKey("workingFolder")) {
       workingFolder = props.getProperty("workingFolder")
     }
@@ -129,6 +160,7 @@ class ClusterConfig extends Logging {
 
     Jobs.load(props)
     Webserver.load(props)
+    YARN.load(props)
 
     distLocation match {
 

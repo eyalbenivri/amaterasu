@@ -10,19 +10,20 @@ case class Args(
                  name: String = "amaterasu-job",
                  jobId: String = null,
                  report: String = "code",
-                 home: String = "",
-                 jarPath: String = ""
+                 home: String = ""
                ) {
   def toCmdString: String = {
-    s""" --repo $repo --branch $branch --env $env --name $name --jobId $jobId --report $report --home $home --jar-path $jarPath"""
+    s""" --repo $repo --branch $branch --env $env --name $name --jobId $jobId --report $report --home $home"""
   }
 
 }
 
 object Args {
   def getParser: scopt.OptionParser[Args] = {
+    val pack = this.getClass.getPackage
     new scopt.OptionParser[Args]("amaterasu job") {
-      head("amaterasu job", "0.2.0") //TODO: Get the version from the build
+
+      head("amaterasu job", if(pack == null) "DEVELOPMENT" else pack.getImplementationVersion)
 
       opt[String]('r', "repo") action { (x, c) =>
         c.copy(repo = x)
@@ -51,10 +52,6 @@ object Args {
       opt[String]('h', "home") action { (x, c) =>
         c.copy(home = x)
       }
-
-      opt[String]('j', "jar-path") action { (x, c) =>
-        c.copy(jarPath = x)
-      } text "The path to the executable jar"
     }
   }
 }

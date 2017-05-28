@@ -24,6 +24,18 @@ import scala.collection.mutable
   */
 object YarnJobLauncher extends BaseJobLauncher {
   var configFile: String = _
+  var fs:FileSystem = null
+
+  def setLocalResourceFromPath(path: Path): LocalResource = {
+    val stat = fs.getFileStatus(path)
+    val fileResource = Records.newRecord(classOf[LocalResource])
+    fileResource.setResource(ConverterUtils.getYarnUrlFromPath(path))
+    fileResource.setSize(stat.getLen)
+    fileResource.setTimestamp(stat.getModificationTime)
+    fileResource.setType(LocalResourceType.FILE)
+    fileResource.setVisibility(LocalResourceVisibility.PUBLIC)
+    fileResource
+  }
 
   override def run(arguments: Args, config: ClusterConfig, resume: Boolean): Unit = {
     // Create YARN Client
@@ -42,26 +54,26 @@ object YarnJobLauncher extends BaseJobLauncher {
     ))
 
     // Setup jars on hdfs
-    val fs = FileSystem.get(conf)
-    val jarPath = new Path(arguments.jarPath)
+    fs = FileSystem.get(conf)
+    val jarPath = new Path(config.YARN.hdfsJarsPath)
     val jarPathQualified = fs.makeQualified(jarPath)
 
     if (!fs.exists(jarPathQualified)) {
       fs.mkdirs(jarPathQualified)
-      // TODO: copy files to HDFS
-      //fs.copyFromLocalFile(false, true, )
+      fs.copyFromLocalFile(false, true, new Path(arguments.home), jarPathQualified)
     }
 
-    val jarStat = fs.getFileStatus(Path.mergePaths(jarPathQualified, new Path("bin/leader-0.2.0-all.jar")))
-    val appMasterJar = Records.newRecord(classOf[LocalResource])
-    appMasterJar.setResource(ConverterUtils.getYarnUrlFromPath(jarPath))
-    appMasterJar.setSize(jarStat.getLen)
-    appMasterJar.setTimestamp(jarStat.getModificationTime)
-    appMasterJar.setType(LocalResourceType.FILE)
-    appMasterJar.setVisibility(LocalResourceVisibility.PUBLIC)
+    // get version of build
+    val version = this.getClass.getPackage.getImplementationVersion
 
+    // get local resources pointers that will be set on the master container env
+    val leaderJar: LocalResource = setLocalResourceFromPath(Path.mergePaths(jarPathQualified, new Path(s"bin/leader-$version-all.jar")))
+    val propFile: LocalResource = setLocalResourceFromPath(Path.mergePaths(jarPathQualified, new Path(s"amaterasu.propertis")))
+
+    // set local resource on master container
     amContainer.setLocalResources(mutable.HashMap[String, LocalResource](
-      "app.jar" -> appMasterJar
+      "leader.jar" -> leaderJar,
+      "amaterasu.properties" -> propFile
     ))
 
     // Setup CLASSPATH for ApplicationMaster
@@ -75,15 +87,15 @@ object YarnJobLauncher extends BaseJobLauncher {
 
     // Set up resource type requirements for ApplicationMaster
     val capability = Records.newRecord(classOf[Resource])
-    capability.setMemory(256)
-    capability.setVirtualCores(1)
+    capability.setMemory(config.YARN.Master.memoryMB)
+    capability.setVirtualCores(config.YARN.Master.cores)
 
     // Finally, set-up ApplicationSubmissionContext for the application
     val appContext = app.getApplicationSubmissionContext
     appContext.setApplicationName(arguments.name) // application name
     appContext.setAMContainerSpec(amContainer)
     appContext.setResource(capability)
-    appContext.setQueue(config.yarnQueue) // queue
+    appContext.setQueue(config.YARN.queue) // queue
 
     // Submit application
     val appId = appContext.getApplicationId

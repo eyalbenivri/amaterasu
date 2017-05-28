@@ -11,15 +11,15 @@ import io.shinto.amaterasu.common.configuration.ClusterConfig
 import io.shinto.amaterasu.common.dataobjects.ActionData
 import io.shinto.amaterasu.enums.ActionStatus
 import io.shinto.amaterasu.enums.ActionStatus.ActionStatus
-import io.shinto.amaterasu.leader.mesos.executors.DataLoader
 import io.shinto.amaterasu.common.execution.actions._
 import io.shinto.amaterasu.common.execution.actions.NotificationLevel.NotificationLevel
 import io.shinto.amaterasu.leader.execution.{JobLoader, JobManager}
-import io.shinto.amaterasu.leader.utilities.HttpServer
+import io.shinto.amaterasu.leader.utilities.{DataLoader, HttpServer}
 import org.apache.curator.framework.{CuratorFramework, CuratorFrameworkFactory}
 import org.apache.curator.retry.ExponentialBackoffRetry
 import org.apache.mesos.Protos.CommandInfo.URI
 import org.apache.mesos.Protos._
+import org.apache.mesos.protobuf.ByteString
 import org.apache.mesos.{Protos, SchedulerDriver}
 
 import scala.collection.JavaConverters._
@@ -164,9 +164,11 @@ class JobScheduler extends AmaterasuScheduler {
                     .setExtract(true)
                     .build())
 
+                val execData = DataLoader.getExecutorData(env)
+                val execDataBytes = mapper.writeValueAsBytes(execData)
                 executor = ExecutorInfo
                   .newBuilder
-                  .setData(DataLoader.getExecutorData(env))
+                  .setData(ByteString.copyFrom(execDataBytes))
                   .setName(taskId.getValue)
                   .setExecutorId(ExecutorID.newBuilder().setValue(taskId.getValue + "-" + UUID.randomUUID()))
                   .setCommand(command)
@@ -176,14 +178,16 @@ class JobScheduler extends AmaterasuScheduler {
               }
             }
 
+            val taskData = DataLoader.getTaskData(actionData, env)
+            val taskDataBytes = mapper.writeValueAsBytes(taskData)
+
             val actionTask = TaskInfo
               .newBuilder
               .setName(taskId.getValue)
               .setTaskId(taskId)
               .setSlaveId(offer.getSlaveId)
               .setExecutor(executor)
-
-              .setData(DataLoader.getTaskData(actionData, env))
+              .setData(ByteString.copyFrom(taskDataBytes))
               .addResources(createScalarResource("cpus", config.Jobs.Tasks.cpus))
               .addResources(createScalarResource("mem", config.Jobs.Tasks.mem))
               .addResources(createScalarResource("disk", config.Jobs.repoSize))
