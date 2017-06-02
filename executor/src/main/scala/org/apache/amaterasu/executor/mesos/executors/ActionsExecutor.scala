@@ -16,7 +16,7 @@
  */
 package org.apache.amaterasu.executor.mesos.executors
 
-import java.io.{ByteArrayInputStream, ByteArrayOutputStream, File}
+import java.io.{ByteArrayInputStream, ByteArrayOutputStream}
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.scala.DefaultScalaModule
@@ -24,6 +24,9 @@ import com.fasterxml.jackson.module.scala.DefaultScalaModule
 import org.apache.amaterasu.common.dataobjects.{ExecData, TaskData}
 import org.apache.amaterasu.common.logging.Logging
 
+import org.apache.amaterasu.common.dataobjects.{ExecData, TaskData}
+import org.apache.amaterasu.common.logging.Logging
+import org.apache.amaterasu.executor.execution.actions.runners.ProvidersFactory
 import org.apache.mesos.Protos._
 import org.apache.mesos.protobuf.ByteString
 import org.apache.mesos.{Executor, ExecutorDriver, MesosExecutorDriver}
