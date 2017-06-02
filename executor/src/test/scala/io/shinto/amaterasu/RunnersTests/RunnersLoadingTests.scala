@@ -5,7 +5,7 @@ import java.io.ByteArrayOutputStream
 import io.shinto.amaterasu.common.dataobjects.ExecData
 import io.shinto.amaterasu.common.execution.dependencies.{Artifact, Dependencies, Repo}
 import io.shinto.amaterasu.common.runtime.Environment
-import io.shinto.amaterasu.executor.mesos.executors.ProvidersFactory
+import io.shinto.amaterasu.executor.execution.actions.runners.ProvidersFactory
 import io.shinto.amaterasu.utilities.TestNotifier
 import org.apache.spark.repl.amaterasu.runners.spark.SparkScalaRunner
 import org.scalatest.{BeforeAndAfterAll, FlatSpec, Matchers}

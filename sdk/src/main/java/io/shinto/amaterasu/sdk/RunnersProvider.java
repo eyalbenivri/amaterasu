@@ -2,7 +2,6 @@ package io.shinto.amaterasu.sdk;
 
 import io.shinto.amaterasu.common.dataobjects.ExecData;
 import io.shinto.amaterasu.common.execution.actions.Notifier;
-import io.shinto.amaterasu.common.runtime.Environment;
 
 import java.io.ByteArrayOutputStream;
 

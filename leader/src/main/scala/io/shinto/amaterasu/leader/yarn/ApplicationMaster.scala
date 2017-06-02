@@ -109,6 +109,7 @@ class ApplicationMaster extends Logging {
       for (container <- response.getAllocatedContainers.asScala) { // Launch container by create ContainerLaunchContext
         val actionData = jobManager.getNextActionData
         val taskData = DataLoader.getTaskData(actionData, env)
+        val execData = DataLoader.getExecutorData(env)
 
         val ctx = Records.newRecord(classOf[ContainerLaunchContext])
         val command = s"""$awsEnv env AMA_NODE=${sys.env("AMA_NODE")}
@@ -116,7 +117,7 @@ class ApplicationMaster extends Logging {
              | java -cp executor-0.2.0-all.jar:spark-${config.Webserver.sparkVersion}/lib/*
              | -Dscala.usejavacp=true
              | -Djava.library.path=/usr/lib io.shinto.amaterasu.executor.yarn.executors.ActionsExecutorLauncher
-             | ${jobManager.jobId} ${config.master} ${gson.toJson(taskData)}""".stripMargin
+             | ${jobManager.jobId} ${config.master} ${actionData.name} ${gson.toJson(taskData)} ${gson.toJson(execData)}""".stripMargin
         ctx.setCommands(Collections.singletonList(command))
 
         ctx.setLocalResources(Map[String, LocalResource] (

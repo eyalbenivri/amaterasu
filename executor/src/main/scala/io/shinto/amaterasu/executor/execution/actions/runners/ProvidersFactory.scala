@@ -1,4 +1,4 @@
-package io.shinto.amaterasu.executor.mesos.executors
+package io.shinto.amaterasu.executor.execution.actions.runners
 
 import java.io.ByteArrayOutputStream
 

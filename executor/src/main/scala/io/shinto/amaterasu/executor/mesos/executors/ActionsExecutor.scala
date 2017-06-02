@@ -1,12 +1,12 @@
 package io.shinto.amaterasu.executor.mesos.executors
 
-import java.io.{ByteArrayInputStream, ByteArrayOutputStream, File}
+import java.io.{ByteArrayInputStream, ByteArrayOutputStream}
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.scala.DefaultScalaModule
 import io.shinto.amaterasu.common.dataobjects.{ExecData, TaskData}
 import io.shinto.amaterasu.common.logging.Logging
-import io.shinto.amaterasu.sdk.AmaterasuRunner
+import io.shinto.amaterasu.executor.execution.actions.runners.ProvidersFactory
 import org.apache.mesos.Protos._
 import org.apache.mesos.protobuf.ByteString
 import org.apache.mesos.{Executor, ExecutorDriver, MesosExecutorDriver}
