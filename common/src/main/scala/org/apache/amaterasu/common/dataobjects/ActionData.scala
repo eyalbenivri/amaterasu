@@ -1,7 +1,6 @@
 package org.apache.amaterasu.common.dataobjects
 
-import com.google.gson.Gson
-import org.apache.amaterasu.enums.ActionStatus.ActionStatus
+import org.apache.amaterasu.common.configuration.enums.ActionStatus.ActionStatus
 
 import scala.collection.mutable.ListBuffer
 
@@ -11,17 +10,7 @@ case class ActionData(var status: ActionStatus,
                       groupId: String,
                       typeId: String,
                       id: String,
+                      exports: Map[String, String],
                       nextActionIds: ListBuffer[String]) {
   var errorActionId: String = null
-}
-
-object ActionDataHelper {
-  private val gson = new Gson
-  def toJsonString(actionData: ActionData): String = {
-    gson.toJson(actionData)
-  }
-
-  def fromJsonString(jsonString: String) : ActionData = {
-    gson.fromJson[ActionData](jsonString, ActionData.getClass)
-  }
 }

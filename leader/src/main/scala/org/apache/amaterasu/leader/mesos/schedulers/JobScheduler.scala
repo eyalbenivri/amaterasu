@@ -27,9 +27,9 @@ import com.fasterxml.jackson.module.scala.DefaultScalaModule
 import org.apache.amaterasu.leader.execution.JobManager
 import org.apache.amaterasu.leader.utilities.DataLoader
 import org.apache.amaterasu.common.configuration.ClusterConfig
+import org.apache.amaterasu.common.configuration.enums.ActionStatus
+import org.apache.amaterasu.common.configuration.enums.ActionStatus.ActionStatus
 import org.apache.amaterasu.common.dataobjects.ActionData
-import org.apache.amaterasu.enums.ActionStatus
-import org.apache.amaterasu.enums.ActionStatus.ActionStatus
 import org.apache.amaterasu.common.execution.actions._
 import org.apache.amaterasu.common.execution.actions.NotificationLevel.NotificationLevel
 import org.apache.amaterasu.leader.execution.{JobLoader, JobManager}
@@ -46,17 +46,17 @@ import scala.collection.concurrent
 import scala.collection.concurrent.TrieMap
 
 /**
-  * The JobScheduler is a mesos implementation. It is in charge of scheduling the execution of
+  * The JobScheduler is a Mesos implementation. It is in charge of scheduling the execution of
   * Amaterasu actions for a specific job
   */
 class JobScheduler extends AmaterasuScheduler {
 
-  private var jobManager: JobManager = null
-  private var client: CuratorFramework = null
-  private var config: ClusterConfig = null
-  private var src: String = null
-  private var env: String = null
-  private var branch: String = null
+  private var jobManager: JobManager = _
+  private var client: CuratorFramework = _
+  private var config: ClusterConfig = _
+  private var src: String = _
+  private var env: String = _
+  private var branch: String = _
   private var resume: Boolean = false
   private var reportLevel: NotificationLevel = _
 
@@ -82,7 +82,7 @@ class JobScheduler extends AmaterasuScheduler {
 
   def disconnected(driver: SchedulerDriver) {}
 
-  def frameworkMessage(driver: SchedulerDriver, executorId: ExecutorID, slaveId: SlaveID, data: Array[Byte]) = {
+  def frameworkMessage(driver: SchedulerDriver, executorId: ExecutorID, slaveId: SlaveID, data: Array[Byte]): Unit = {
 
     val notification = mapper.readValue(data, classOf[Notification])
 
@@ -96,7 +96,7 @@ class JobScheduler extends AmaterasuScheduler {
 
   }
 
-  def statusUpdate(driver: SchedulerDriver, status: TaskStatus) = {
+  def statusUpdate(driver: SchedulerDriver, status: TaskStatus): Unit = {
 
     status.getState match {
       case TaskState.TASK_RUNNING => jobManager.actionStarted(status.getTaskId.getValue)
@@ -118,9 +118,9 @@ class JobScheduler extends AmaterasuScheduler {
       resources.count(r => r.getName == "mem" && r.getScalar.getValue >= config.Jobs.Tasks.mem) > 0
   }
 
-  def offerRescinded(driver: SchedulerDriver, offerId: OfferID) = {
+  def offerRescinded(driver: SchedulerDriver, offerId: OfferID): Unit = {
 
-    val actionId = offersToTaskIds.get(offerId.getValue).get
+    val actionId = offersToTaskIds(offerId.getValue)
     jobManager.reQueueAction(actionId)
 
   }
@@ -150,7 +150,7 @@ class JobScheduler extends AmaterasuScheduler {
             // on a slave level to efficiently handle slave loses
             executionMap.putIfAbsent(offer.getSlaveId.toString, new ConcurrentHashMap[String, ActionStatus].asScala)
 
-            val slaveActions = executionMap.get(offer.getSlaveId.toString).get
+            val slaveActions = executionMap(offer.getSlaveId.toString)
             slaveActions.put(taskId.getValue, ActionStatus.started)
 
             // searching for an executor that already exist on the slave, if non exist
@@ -167,25 +167,13 @@ class JobScheduler extends AmaterasuScheduler {
               }
               else {
 
-                val command = CommandInfo
-                  .newBuilder
-                  .setValue(
-                    s"""$awsEnv env AMA_NODE=${sys.env("AMA_NODE")} env MESOS_NATIVE_JAVA_LIBRARY=/usr/lib/libmesos.so env SPARK_EXECUTOR_URI=http://${sys.env("AMA_NODE")}:${config.Webserver.Port}/dist/spark-${config.Webserver.sparkVersion}.tgz java -cp executor-0.2.0-all.jar:spark-${config.Webserver.sparkVersion}/lib/* -Dscala.usejavacp=true -Djava.library.path=/usr/lib org.apache.amaterasu.executor.mesos.executors.ActionsExecutorLauncher ${jobManager.jobId} ${config.master} ${actionData.name}""".stripMargin
-  * The JobScheduler is a Mesos implementation. It is in charge of scheduling the execution of
-  private var jobManager: JobManager = _
-  private var client: CuratorFramework = _
-  private var config: ClusterConfig = _
-  private var src: String = _
-  private var env: String = _
-  private var branch: String = _
-  def frameworkMessage(driver: SchedulerDriver, executorId: ExecutorID, slaveId: SlaveID, data: Array[Byte]): Unit = {
-  def statusUpdate(driver: SchedulerDriver, status: TaskStatus): Unit = {
-  def offerRescinded(driver: SchedulerDriver, offerId: OfferID): Unit = {
-    val actionId = offersToTaskIds(offerId.getValue)
                 val execData = DataLoader.getExecutorData(env)
                 //TODO: wait for Eyal's refactoring to extract the containers params
                 //val extraJavaOps = execData...
 
+                val command = CommandInfo
+                  .newBuilder
+                  .setValue(
                     s"""$awsEnv env AMA_NODE=${sys.env("AMA_NODE")} env MESOS_NATIVE_JAVA_LIBRARY=/usr/lib/libmesos.so env SPARK_EXECUTOR_URI=http://${sys.env("AMA_NODE")}:${config.Webserver.Port}/dist/spark-${config.Webserver.sparkVersion}.tgz java -cp executor-0.2.0-incubating-all.jar:spark-${config.Webserver.sparkVersion}/jars/* -Dscala.usejavacp=true -Djava.library.path=/usr/lib io.shinto.amaterasu.executor.mesos.executors.ActionsExecutorLauncher ${jobManager.jobId} ${config.master} ${actionData.name}""".stripMargin
                   )
                   .addUris(URI.newBuilder
@@ -199,11 +187,9 @@ class JobScheduler extends AmaterasuScheduler {
                     .setExtract(true)
                     .build())
 
-                val execData = DataLoader.getExecutorData(env)
-                val execDataBytes = mapper.writeValueAsBytes(execData)
                 executor = ExecutorInfo
                   .newBuilder
-                  .setData(ByteString.copyFrom(execDataBytes))
+                  .setData(execData)
                   .setName(taskId.getValue)
                   .setExecutorId(ExecutorID.newBuilder().setValue(taskId.getValue + "-" + UUID.randomUUID()))
                   .setCommand(command)
@@ -213,16 +199,14 @@ class JobScheduler extends AmaterasuScheduler {
               }
             }
 
-            val taskData = DataLoader.getTaskData(actionData, env)
-            val taskDataBytes = mapper.writeValueAsBytes(taskData)
-
             val actionTask = TaskInfo
               .newBuilder
               .setName(taskId.getValue)
               .setTaskId(taskId)
               .setSlaveId(offer.getSlaveId)
               .setExecutor(executor)
-              .setData(ByteString.copyFrom(taskDataBytes))
+
+              .setData(DataLoader.getTaskData(actionData, env))
               .addResources(createScalarResource("cpus", config.Jobs.Tasks.cpus))
               .addResources(createScalarResource("mem", config.Jobs.Tasks.mem))
               .addResources(createScalarResource("disk", config.Jobs.repoSize))

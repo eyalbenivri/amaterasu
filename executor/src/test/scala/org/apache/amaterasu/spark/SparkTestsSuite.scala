@@ -22,8 +22,8 @@ import org.apache.amaterasu.RunnersTests.RunnersLoadingTests
 import org.apache.amaterasu.common.dataobjects.ExecData
 import org.apache.amaterasu.common.execution.dependencies.{Artifact, Dependencies, Repo}
 import org.apache.amaterasu.common.runtime.Environment
+import org.apache.amaterasu.executor.common.executors.ProvidersFactory
 import org.apache.amaterasu.utilities.TestNotifier
-import org.apache.amaterasu.executor.mesos.executors.ProvidersFactory
 import org.apache.spark.repl.amaterasu.runners.spark.SparkScalaRunner
 import org.apache.spark.sql.SparkSession
 import org.scalatest._

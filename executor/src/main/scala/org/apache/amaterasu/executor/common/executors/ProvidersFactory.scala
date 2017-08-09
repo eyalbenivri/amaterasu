@@ -14,13 +14,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.amaterasu.executor.mesos.executors
+package org.apache.amaterasu.executor.common.executors
 
 import java.io.ByteArrayOutputStream
 
 import org.apache.amaterasu.common.dataobjects.ExecData
 import org.apache.amaterasu.common.execution.actions.Notifier
-import io.shinto.amaterasu.sdk.{AmaterasuRunner, RunnersProvider}
+import org.apache.amaterasu.sdk.{AmaterasuRunner, RunnersProvider}
 import org.reflections.Reflections
 
 import scala.collection.JavaConversions._

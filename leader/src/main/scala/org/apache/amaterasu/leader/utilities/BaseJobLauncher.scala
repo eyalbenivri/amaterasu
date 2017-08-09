@@ -1,9 +1,9 @@
-package io.shinto.amaterasu.leader.utilities
+package org.apache.amaterasu.leader.utilities
 
 import java.io.FileInputStream
 
-import io.shinto.amaterasu.common.configuration.ClusterConfig
-import io.shinto.amaterasu.common.logging.Logging
+import org.apache.amaterasu.common.configuration.ClusterConfig
+import org.apache.amaterasu.common.logging.Logging
 
 /**
   * Created by eyalbenivri on 24.05.17.

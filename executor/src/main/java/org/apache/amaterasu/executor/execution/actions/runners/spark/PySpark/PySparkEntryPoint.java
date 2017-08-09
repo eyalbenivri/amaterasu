@@ -23,7 +23,6 @@ import org.apache.spark.SparkEnv;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SQLContext;
 import org.apache.spark.SparkConf;
-import org.apache.spark.SparkContext;
 
 import org.apache.spark.sql.SparkSession;
 import py4j.GatewayServer;

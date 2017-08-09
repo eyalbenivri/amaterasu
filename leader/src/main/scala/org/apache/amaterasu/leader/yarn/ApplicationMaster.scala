@@ -1,20 +1,19 @@
-package io.shinto.amaterasu.leader.yarn
+package org.apache.amaterasu.leader.yarn
 
-import java.io.IOException
 import java.util.Collections
 import java.util.concurrent.locks.ReentrantLock
 import java.util.concurrent.{ConcurrentHashMap, LinkedBlockingQueue}
 
 import com.google.gson.Gson
-import io.shinto.amaterasu.common.configuration.ClusterConfig
-import io.shinto.amaterasu.common.dataobjects.{ActionData, ActionDataHelper}
-import io.shinto.amaterasu.common.execution.actions.NotificationLevel.NotificationLevel
-import io.shinto.amaterasu.common.logging.Logging
-import io.shinto.amaterasu.enums.ActionStatus.ActionStatus
-import io.shinto.amaterasu.leader.execution.{JobLoader, JobManager}
-import io.shinto.amaterasu.leader.utilities.{Args, BaseJobLauncher, DataLoader}
+import org.apache.amaterasu.common.configuration.ClusterConfig
+import org.apache.amaterasu.common.configuration.enums.ActionStatus.ActionStatus
+import org.apache.amaterasu.common.dataobjects.ActionData
+import org.apache.amaterasu.common.execution.actions.NotificationLevel.NotificationLevel
+import org.apache.amaterasu.common.logging.Logging
+import org.apache.amaterasu.leader.execution.{JobLoader, JobManager}
+import org.apache.amaterasu.leader.utilities.{Args, BaseJobLauncher, DataLoader}
 import org.apache.curator.framework.CuratorFramework
-import org.apache.hadoop.fs.{FileStatus, FileSystem, Path}
+import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.hadoop.yarn.api.records._
 import org.apache.hadoop.yarn.client.api.AMRMClient.ContainerRequest
 import org.apache.hadoop.yarn.client.api.{AMRMClient, NMClient}

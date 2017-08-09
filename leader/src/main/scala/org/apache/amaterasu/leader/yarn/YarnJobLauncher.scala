@@ -1,10 +1,10 @@
-package io.shinto.amaterasu.leader.yarn
+package org.apache.amaterasu.leader.yarn
 
 import java.io.File
 import java.util.Collections
 
-import io.shinto.amaterasu.common.configuration.ClusterConfig
-import io.shinto.amaterasu.leader.utilities.{Args, BaseJobLauncher}
+import org.apache.amaterasu.common.configuration.ClusterConfig
+import org.apache.amaterasu.leader.utilities.{Args, BaseJobLauncher}
 import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.hadoop.yarn.api.ApplicationConstants.Environment
 import org.apache.hadoop.yarn.api.records.{LocalResource, _}
@@ -50,7 +50,7 @@ object YarnJobLauncher extends BaseJobLauncher {
     // Set up the container launch context for the application master
     val amContainer = Records.newRecord(classOf[ContainerLaunchContext])
     amContainer.setCommands(Collections.singletonList("$JAVA_HOME/bin/java " +
-      "io.shinto.amaterasu.leader.yarn.ApplicationMaster " + arguments.toCmdString
+      "org.apache.amaterasu.leader.yarn.ApplicationMaster " + arguments.toCmdString
     ))
 
     // Setup jars on hdfs

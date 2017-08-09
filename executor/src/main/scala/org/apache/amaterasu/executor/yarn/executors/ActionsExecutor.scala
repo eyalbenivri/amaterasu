@@ -1,11 +1,12 @@
-package io.shinto.amaterasu.executor.yarn.executors
+package org.apache.amaterasu.executor.yarn.executors
 
 import java.io.ByteArrayOutputStream
+import java.util.UUID
 
 import com.google.gson.Gson
-import io.shinto.amaterasu.common.dataobjects.{ExecData, TaskData}
-import io.shinto.amaterasu.common.logging.Logging
-import io.shinto.amaterasu.executor.execution.actions.runners.ProvidersFactory
+import org.apache.amaterasu.common.dataobjects.{ExecData, TaskData}
+import org.apache.amaterasu.common.logging.Logging
+import org.apache.amaterasu.executor.common.executors.ProvidersFactory
 import org.apache.spark.SparkContext
 
 /**
@@ -41,5 +42,6 @@ object ActionsExecutorLauncher extends App with Logging {
   actionsExecutor.taskData = taskData
   actionsExecutor.execData = execData
   val baos = new ByteArrayOutputStream()
-  actionsExecutor.providersFactory = ProvidersFactory(execData, jobId, baos, notifier, executorInfo.getExecutorId.getValue)
+  val notifier = new YarnNotifier()
+  actionsExecutor.providersFactory = ProvidersFactory(execData, jobId, baos, notifier, UUID.randomUUID().toString) // TODO: we need an yarn container id here. In the meantime... UUID
 }

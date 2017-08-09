@@ -1,4 +1,4 @@
-package io.shinto.amaterasu.leader.utilities
+package org.apache.amaterasu.leader.utilities
 
 /**
   * Created by eyalbenivri on 26/04/2017.
