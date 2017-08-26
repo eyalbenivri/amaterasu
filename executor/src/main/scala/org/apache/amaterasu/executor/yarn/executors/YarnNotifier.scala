@@ -2,9 +2,15 @@ package org.apache.amaterasu.executor.yarn.executors
 
 import org.apache.amaterasu.common.execution.actions.Notifier
 import org.apache.amaterasu.common.logging.Logging
+import org.apache.hadoop.yarn.conf.YarnConfiguration
+import org.apache.hadoop.yarn.ipc.YarnRPC
 
-class YarnNotifier() extends Notifier with Logging {
+class YarnNotifier(conf: YarnConfiguration) extends Notifier with Logging {
+
+  var rpc: YarnRPC = YarnRPC.create(conf)
+
   override def info(msg: String): Unit = {
+    rpc.
     log.error(s"""-> ${msg}""")
   }
 

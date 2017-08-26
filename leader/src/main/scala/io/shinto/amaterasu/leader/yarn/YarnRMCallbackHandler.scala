@@ -8,7 +8,7 @@ import org.apache.hadoop.yarn.client.api.async.AMRMClientAsync
 /**
   * Created by roadan on 23/8/17.
   */
-class AmaterasuYarnRMCallbackHandler extends AMRMClientAsync.CallbackHandler {
+class YarnRMCallbackHandler extends AMRMClientAsync.CallbackHandler {
 
   override def onError(e: Throwable): Unit = ???
 

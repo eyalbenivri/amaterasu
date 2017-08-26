@@ -6,18 +6,20 @@ import java.util.concurrent.locks.ReentrantLock
 import java.util.concurrent.{ConcurrentHashMap, LinkedBlockingQueue}
 
 import com.google.gson.Gson
-import io.shinto.amaterasu.common.configuration.ClusterConfig
-import io.shinto.amaterasu.common.dataobjects.{ActionData, ActionDataHelper}
-import io.shinto.amaterasu.common.execution.actions.NotificationLevel.NotificationLevel
-import io.shinto.amaterasu.common.logging.Logging
-import io.shinto.amaterasu.enums.ActionStatus.ActionStatus
-import io.shinto.amaterasu.leader.execution.{JobLoader, JobManager}
-import io.shinto.amaterasu.leader.utilities.{Args, BaseJobLauncher, DataLoader}
+import org.apache.amaterasu.common.configuration.ClusterConfig
+import org.apache.amaterasu.common.dataobjects.{ActionData, ActionDataHelper}
+import org.apache.amaterasu.common.execution.actions.NotificationLevel.NotificationLevel
+import org.apache.amaterasu.common.logging.Logging
+import org.apache.amaterasu.common.configuration.enums.ActionStatus.ActionStatus
+import org.apache.amaterasu.leader.execution.{JobLoader, JobManager}
+import org.apache.amaterasu.leader.utilities.{Args, BaseJobLauncher, DataLoader}
 import org.apache.curator.framework.CuratorFramework
 import org.apache.hadoop.fs.{FileStatus, FileSystem, Path}
 import org.apache.hadoop.yarn.api.records._
 import org.apache.hadoop.yarn.client.api.AMRMClient.ContainerRequest
 import org.apache.hadoop.yarn.client.api.{AMRMClient, NMClient}
+import org.apache.hadoop.yarn.client.api.async.AMRMClientAsync
+
 import org.apache.hadoop.yarn.conf.YarnConfiguration
 import org.apache.hadoop.yarn.util.{ConverterUtils, Records}
 
@@ -49,7 +51,11 @@ class ApplicationMaster extends Logging {
   private val containersIdsToTaskIds: concurrent.Map[Long, String] = new ConcurrentHashMap[Long, String].asScala
 
   val conf: YarnConfiguration = new YarnConfiguration()
-  val rmClient: AMRMClient[ContainerRequest] = AMRMClient.createAMRMClient()
+
+  //TODO:
+  val allocListener = new YarnRMCallbackHandler()
+  val rmClient = AMRMClientAsync.createAMRMClientAsync(1000, allocListener)
+  //val rmClient: AMRMClient[ContainerRequest] = AMRMClient.createAMRMClient()
   val nmClient:NMClient = null
 
   val gson:Gson = new Gson()
