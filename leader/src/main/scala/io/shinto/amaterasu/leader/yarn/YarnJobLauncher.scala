@@ -3,10 +3,10 @@ package io.shinto.amaterasu.leader.yarn
 import java.io.File
 import java.util.Collections
 
-import io.shinto.amaterasu.common.configuration.ClusterConfig
-import io.shinto.amaterasu.leader.utilities.{Args, BaseJobLauncher}
+import org.apache.amaterasu.leader.utilities.{Args, BaseJobLauncher}
 import org.apache.amaterasu.common.configuration.ClusterConfig
 import org.apache.amaterasu.common.logging.Logging
+
 import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.hadoop.yarn.api.ApplicationConstants.Environment
 import org.apache.hadoop.yarn.api.records.{LocalResource, _}
@@ -18,15 +18,12 @@ import scala.collection.JavaConversions._
 import scala.collection.mutable
 
 /**
-  * Created by eyalbenivri on 26/04/2017.
-  */
-/**
   * The JobLauncher allows the execution of a single job, without creating a full
   * Amaterasu cluster (no cluster scheduler).
   */
 object YarnJobLauncher extends BaseJobLauncher with Logging {
   var configFile: String = _
-  var fs:FileSystem = null
+  var fs:FileSystem = _
 
   def setLocalResourceFromPath(path: Path): LocalResource = {
     val stat = fs.getFileStatus(path)

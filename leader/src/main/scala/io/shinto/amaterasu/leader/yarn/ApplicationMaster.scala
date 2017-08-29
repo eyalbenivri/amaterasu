@@ -13,13 +13,13 @@ import org.apache.amaterasu.common.logging.Logging
 import org.apache.amaterasu.common.configuration.enums.ActionStatus.ActionStatus
 import org.apache.amaterasu.leader.execution.{JobLoader, JobManager}
 import org.apache.amaterasu.leader.utilities.{Args, BaseJobLauncher, DataLoader}
+import org.apache.amaterasu.leader.yarn.YarnRMCallbackHandler
 import org.apache.curator.framework.CuratorFramework
 import org.apache.hadoop.fs.{FileStatus, FileSystem, Path}
 import org.apache.hadoop.yarn.api.records._
 import org.apache.hadoop.yarn.client.api.AMRMClient.ContainerRequest
 import org.apache.hadoop.yarn.client.api.{AMRMClient, NMClient}
 import org.apache.hadoop.yarn.client.api.async.AMRMClientAsync
-
 import org.apache.hadoop.yarn.conf.YarnConfiguration
 import org.apache.hadoop.yarn.util.{ConverterUtils, Records}
 

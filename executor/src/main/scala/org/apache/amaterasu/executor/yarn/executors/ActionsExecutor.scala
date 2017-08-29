@@ -42,6 +42,6 @@ object ActionsExecutorLauncher extends App with Logging {
   actionsExecutor.taskData = taskData
   actionsExecutor.execData = execData
   val baos = new ByteArrayOutputStream()
-  val notifier = new YarnNotifier()
+  val notifier = new YarnNotifier(null)
   actionsExecutor.providersFactory = ProvidersFactory(execData, jobId, baos, notifier, UUID.randomUUID().toString) // TODO: we need an yarn container id here. In the meantime... UUID
 }
