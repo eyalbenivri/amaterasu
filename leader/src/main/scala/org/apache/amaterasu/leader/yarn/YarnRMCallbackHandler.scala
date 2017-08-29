@@ -32,6 +32,7 @@ import org.apache.hadoop.yarn.util.Records
 import scala.collection.JavaConversions._
 import scala.collection.JavaConverters._
 import scala.concurrent.Future
+import scala.util.{Failure, Success}
 /**
   * Created by roadan on 23/8/17.
   */
@@ -59,7 +60,7 @@ class YarnRMCallbackHandler(nmClient: NMClientAsync,
   override def onContainersAllocated(containers: util.List[Container]): Unit = {
 
     for (container <- containers.asScala) { // Launch container by create ContainerLaunchContext
-      val cont = Future {
+      val containerTask = Future {
 
         val actionData = jobManager.getNextActionData
         val taskData = DataLoader.getTaskData(actionData, env)
@@ -83,6 +84,14 @@ class YarnRMCallbackHandler(nmClient: NMClientAsync,
 //        containersIdsToTaskIds.put(container.getId.getContainerId, actionData.id)
 //        askedContainers += 1
 
+      }
+
+      containerTask onComplete {
+        case Failure(t) =>
+          println(s"launching container failed: ${t.getMessage}")
+
+        case Success(ts) =>
+          println(s"launching container succeeded: ${container.getId}")
       }
     }
   }
