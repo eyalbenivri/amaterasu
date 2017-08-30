@@ -30,9 +30,7 @@ import org.scalatest._
 
 import scala.collection.mutable.ListBuffer
 
-/**
-  * Created by roadan on 22/6/17.
-  */
+
 class SparkTestsSuite extends Suites(
   new PySparkRunnerTests(),
   new RunnersLoadingTests()) with BeforeAndAfterAll {

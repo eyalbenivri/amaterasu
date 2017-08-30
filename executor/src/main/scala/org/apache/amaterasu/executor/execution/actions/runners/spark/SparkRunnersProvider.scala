@@ -33,9 +33,7 @@ import scala.collection.JavaConversions._
 import scala.collection.JavaConverters._
 import scala.collection.concurrent.TrieMap
 
-/**
-  * Created by roadan on 2/9/17.
-  */
+
 class SparkRunnersProvider extends RunnersProvider {
 
   private val runners = new TrieMap[String, AmaterasuRunner]

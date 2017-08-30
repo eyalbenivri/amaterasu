@@ -29,9 +29,7 @@ import org.scalatest.{BeforeAndAfterEach, FlatSpec, Matchers}
 
 import scala.io.Source
 
-/**
-  * Created by roadan on 3/18/16.
-  */
+
 class JobRestoreTests extends FlatSpec with Matchers with BeforeAndAfterEach {
 
   val retryPolicy = new ExponentialBackoffRetry(1000, 3)

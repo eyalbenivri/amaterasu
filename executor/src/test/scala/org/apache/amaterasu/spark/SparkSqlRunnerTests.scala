@@ -12,9 +12,7 @@
 //
 //import scala.io.Source
 //
-///**
-//  * Created by kirupa on 10/12/16.
-//  */
+
 //class SparkSqlRunnerTests extends FlatSpec with Matchers with BeforeAndAfterAll {
 //
 //  Logger.getLogger("org").setLevel(Level.OFF)

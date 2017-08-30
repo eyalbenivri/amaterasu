@@ -9,9 +9,7 @@ import org.apache.amaterasu.common.logging.Logging
 import org.apache.amaterasu.executor.common.executors.ProvidersFactory
 import org.apache.spark.SparkContext
 
-/**
-  * Created by eyalbenivri on 31.05.17.
-  */
+
 class ActionsExecutor {
   var master: String = _
   var sc: SparkContext = _

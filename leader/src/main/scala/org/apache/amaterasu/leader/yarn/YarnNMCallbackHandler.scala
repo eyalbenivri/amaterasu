@@ -23,9 +23,6 @@ import org.apache.hadoop.yarn.api.records.{ContainerId, ContainerStatus}
 import org.apache.hadoop.yarn.client.api.async.NMClientAsync
 
 
-/**
-  * Created by roadan on 28/8/17.
-  */
 class YarnNMCallbackHandler extends NMClientAsync.CallbackHandler {
 
   override def onStartContainerError(containerId: ContainerId, t: Throwable): Unit = ???

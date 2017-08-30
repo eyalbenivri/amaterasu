@@ -33,9 +33,7 @@ import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.Future
 import scala.util.{Failure, Success}
 
-/**
-  * Created by roadan on 1/1/16.
-  */
+
 class ActionsExecutor extends Executor with Logging {
 
   var master: String = _

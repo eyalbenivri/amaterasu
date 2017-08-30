@@ -27,9 +27,7 @@ import org.apache.zookeeper.CreateMode
 
 import scala.collection.JavaConverters._
 
-/**
-  * Created by roadan on 3/7/16.
-  */
+
 object JobLoader extends Logging {
 
   def loadJob(src: String, branch: String, jobId: String, client: CuratorFramework, attempts: Int, actionsQueue: BlockingQueue[ActionData]): JobManager = {

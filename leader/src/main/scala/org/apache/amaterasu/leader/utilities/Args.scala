@@ -1,8 +1,6 @@
 package org.apache.amaterasu.leader.utilities
 
-/**
-  * Created by eyalbenivri on 26/04/2017.
-  */
+
 case class Args(
                  repo: String = "",
                  branch: String = "master",

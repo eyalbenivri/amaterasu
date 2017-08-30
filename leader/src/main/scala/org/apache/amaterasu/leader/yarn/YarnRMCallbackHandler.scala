@@ -18,24 +18,22 @@ package org.apache.amaterasu.leader.yarn
 
 import java.util
 import java.util.Collections
+import java.util.concurrent.ConcurrentHashMap
 
 import com.google.gson.Gson
-import com.sun.crypto.provider.AESCipher.AES128_CBC_NoPadding
 import org.apache.amaterasu.common.configuration.ClusterConfig
 import org.apache.amaterasu.leader.execution.JobManager
 import org.apache.amaterasu.leader.utilities.DataLoader
-import org.apache.hadoop.fs.Path
 import org.apache.hadoop.yarn.api.records._
 import org.apache.hadoop.yarn.client.api.async.{AMRMClientAsync, NMClientAsync}
 import org.apache.hadoop.yarn.util.Records
 
 import scala.collection.JavaConversions._
 import scala.collection.JavaConverters._
+import scala.collection.concurrent
 import scala.concurrent.Future
 import scala.util.{Failure, Success}
-/**
-  * Created by roadan on 23/8/17.
-  */
+
 class YarnRMCallbackHandler(nmClient: NMClientAsync,
                             jobManager: JobManager,
                             env: String,
@@ -45,6 +43,7 @@ class YarnRMCallbackHandler(nmClient: NMClientAsync,
 
 
   val gson:Gson = new Gson()
+  private val containersIdsToTaskIds: concurrent.Map[Long, String] = new ConcurrentHashMap[Long, String].asScala
 
   override def onError(e: Throwable): Unit = ???
 
@@ -80,18 +79,17 @@ class YarnRMCallbackHandler(nmClient: NMClientAsync,
         ))
 
         nmClient.startContainerAsync(container, ctx)
-        //TODO: Eyal, please deal with this!
-//        containersIdsToTaskIds.put(container.getId.getContainerId, actionData.id)
-//        askedContainers += 1
-
       }
 
       containerTask onComplete {
-        case Failure(t) =>
+        case Failure(t) => {
           println(s"launching container failed: ${t.getMessage}")
+        }
 
-        case Success(ts) =>
+        case Success(ts) => {
+          containersIdsToTaskIds.put(container.getId.getContainerId, actionData.id)
           println(s"launching container succeeded: ${container.getId}")
+        }
       }
     }
   }

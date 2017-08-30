@@ -33,9 +33,7 @@ import scala.collection.JavaConverters._
 import scala.collection.mutable
 import scala.io.Source
 
-/**
-  * Created by karel_alfonso on 27/06/2016.
-  */
+
 object DataLoader extends Logging {
 
   val mapper = new ObjectMapper()

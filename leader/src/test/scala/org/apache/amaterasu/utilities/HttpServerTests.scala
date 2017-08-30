@@ -23,9 +23,6 @@ import org.scalatest.{FlatSpec, Matchers}
 
 import scala.io.Source
 
-/**
-  * Created by kirupa on 16/10/16.
-  */
 class HttpServerTests extends FlatSpec with Matchers {
 
   // this is an ugly hack, getClass.getResource("/").getPath should have worked but

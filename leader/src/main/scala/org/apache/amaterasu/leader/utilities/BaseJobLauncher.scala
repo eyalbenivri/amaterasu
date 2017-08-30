@@ -5,9 +5,7 @@ import java.io.FileInputStream
 import org.apache.amaterasu.common.configuration.ClusterConfig
 import org.apache.amaterasu.common.logging.Logging
 
-/**
-  * Created by eyalbenivri on 24.05.17.
-  */
+
 abstract class BaseJobLauncher extends App with Logging {
 
   def run(args: Args, config: ClusterConfig, resume: Boolean): Unit = ???

@@ -28,9 +28,7 @@ import org.apache.spark.sql.SparkSession
 import scala.sys.process.Process
 import scala.io.Source
 
-/**
-  * Created by roadan on 9/2/16.
-  */
+
 class PySparkRunner extends AmaterasuRunner with Logging {
 
   var proc: Process = _

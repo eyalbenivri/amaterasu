@@ -16,35 +16,28 @@
  */
 package org.apache.amaterasu.leader.yarn
 
-import java.util.Collections
 import java.util.concurrent.locks.ReentrantLock
 import java.util.concurrent.{ConcurrentHashMap, LinkedBlockingQueue}
 
-import com.google.gson.Gson
 import org.apache.amaterasu.common.configuration.ClusterConfig
 import org.apache.amaterasu.common.configuration.enums.ActionStatus.ActionStatus
 import org.apache.amaterasu.common.dataobjects.ActionData
 import org.apache.amaterasu.common.execution.actions.NotificationLevel.NotificationLevel
 import org.apache.amaterasu.common.logging.Logging
 import org.apache.amaterasu.leader.execution.{JobLoader, JobManager}
-import org.apache.amaterasu.leader.utilities.{Args, BaseJobLauncher, DataLoader}
+import org.apache.amaterasu.leader.utilities.{Args, BaseJobLauncher}
 import org.apache.curator.framework.CuratorFramework
 import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.hadoop.net.NetUtils
 import org.apache.hadoop.yarn.api.records._
 import org.apache.hadoop.yarn.client.api.AMRMClient.ContainerRequest
-import org.apache.hadoop.yarn.client.api.async.{AMRMClientAsync, NMClientAsync}
 import org.apache.hadoop.yarn.client.api.async.impl.NMClientAsyncImpl
-import org.apache.hadoop.yarn.client.api.{AMRMClient, NMClient}
+import org.apache.hadoop.yarn.client.api.async.{AMRMClientAsync, NMClientAsync}
 import org.apache.hadoop.yarn.conf.YarnConfiguration
 import org.apache.hadoop.yarn.util.{ConverterUtils, Records}
 
-import scala.collection.JavaConversions._
 import scala.collection.JavaConverters._
 import scala.collection.concurrent
-/**
-  * Created by eyalbenivri on 26/04/2017.
-  */
 
 class ApplicationMaster extends Logging {
   private var jobManager: JobManager = _
@@ -64,7 +57,6 @@ class ApplicationMaster extends Logging {
   //  +-> taskId, actionStatus)
   private val executionMap: concurrent.Map[String, concurrent.Map[String, ActionStatus]] = new ConcurrentHashMap[String, concurrent.Map[String, ActionStatus]].asScala
   private val lock = new ReentrantLock()
-  private val containersIdsToTaskIds: concurrent.Map[Long, String] = new ConcurrentHashMap[Long, String].asScala
 
   val conf: YarnConfiguration = new YarnConfiguration()
 
@@ -133,15 +125,7 @@ class ApplicationMaster extends Logging {
 
       rmClient.addContainerRequest(containerAsk)
 
-      // Obtain allocated containers, launch and check for responses
-      //val response = rmClient.allocate(0)
-
-//      for (container <- response.getAllocatedContainers.asScala) { // Launch container by create ContainerLaunchContext
-//        val actionData = jobManager.getNextActionData
-//        val taskData = DataLoader.getTaskData(actionData, env)
-//        val execData = DataLoader.getExecutorData(env)
-//
-//        val ctx = Records.newRecord(classOf[ContainerLaunchContext])
+      //        val ctx = Records.newRecord(classOf[ContainerLaunchContext])
 //        val command = s"""$awsEnv env AMA_NODE=${sys.env("AMA_NODE")}
 //             | env SPARK_EXECUTOR_URI=http://${sys.env("AMA_NODE")}:${config.Webserver.Port}/dist/spark-${config.Webserver.sparkVersion}.tgz
 //             | java -cp executor-0.2.0-all.jar:spark-${config.Webserver.sparkVersion}/lib/*
@@ -159,7 +143,6 @@ class ApplicationMaster extends Logging {
 //      }
     }
 
-    // TODO: do this async, right after the first request.
     // TODO: Eyal, move this to the async API
 //    while(completedContainers < askedContainers) {
 //      val response = rmClient.allocate(completedContainers / askedContainers)
