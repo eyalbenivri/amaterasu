@@ -34,6 +34,8 @@ import scala.collection.JavaConverters._
 import scala.collection.concurrent
 import scala.concurrent.Future
 import scala.util.{Failure, Success}
+import scala.concurrent._
+import ExecutionContext.Implicits.global
 
 class YarnRMCallbackHandler(nmClient: NMClientAsync,
                             jobManager: JobManager,
