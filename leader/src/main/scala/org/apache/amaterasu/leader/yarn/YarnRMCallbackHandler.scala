@@ -71,7 +71,7 @@ class YarnRMCallbackHandler(nmClient: NMClientAsync,
                          | env SPARK_EXECUTOR_URI=http://${sys.env("AMA_NODE")}:${config.Webserver.Port}/dist/spark-${config.Webserver.sparkVersion}.tgz
                          | java -cp executor-0.2.0-all.jar:spark-${config.Webserver.sparkVersion}/lib/*
                          | -Dscala.usejavacp=true
-                         | -Djava.library.path=/usr/lib io.shinto.amaterasu.executor.yarn.executors.ActionsExecutorLauncher
+                         | -Djava.library.path=/usr/lib org.apache.amaterasu.executor.yarn.executors.ActionsExecutorLauncher
                          | ${jobManager.jobId} ${config.master} ${actionData.name} ${gson.toJson(taskData)} ${gson.toJson(execData)}""".stripMargin
         ctx.setCommands(Collections.singletonList(command))
 

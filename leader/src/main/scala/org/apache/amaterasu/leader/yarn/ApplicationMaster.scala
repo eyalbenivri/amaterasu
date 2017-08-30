@@ -46,7 +46,7 @@ import scala.collection.concurrent
   * Created by eyalbenivri on 26/04/2017.
   */
 
-class בApplicationMaster extends Logging {
+class ApplicationMaster extends Logging {
   private var jobManager: JobManager = _
   private var client: CuratorFramework = _
   private var config: ClusterConfig = _
@@ -146,7 +146,7 @@ class בApplicationMaster extends Logging {
 //             | env SPARK_EXECUTOR_URI=http://${sys.env("AMA_NODE")}:${config.Webserver.Port}/dist/spark-${config.Webserver.sparkVersion}.tgz
 //             | java -cp executor-0.2.0-all.jar:spark-${config.Webserver.sparkVersion}/lib/*
 //             | -Dscala.usejavacp=true
-//             | -Djava.library.path=/usr/lib io.shinto.amaterasu.executor.yarn.executors.ActionsExecutorLauncher
+//             | -Djava.library.path=/usr/lib org.apache.amaterasu.executor.yarn.executors.ActionsExecutorLauncher
 //             | ${jobManager.jobId} ${config.master} ${actionData.name} ${gson.toJson(taskData)} ${gson.toJson(execData)}""".stripMargin
 //        ctx.setCommands(Collections.singletonList(command))
 //
