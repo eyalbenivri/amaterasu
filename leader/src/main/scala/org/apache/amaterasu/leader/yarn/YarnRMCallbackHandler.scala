@@ -22,6 +22,7 @@ import java.util.concurrent.ConcurrentHashMap
 
 import com.google.gson.Gson
 import org.apache.amaterasu.common.configuration.ClusterConfig
+import org.apache.amaterasu.common.logging.Logging
 import org.apache.amaterasu.leader.execution.JobManager
 import org.apache.amaterasu.leader.utilities.DataLoader
 import org.apache.hadoop.yarn.api.records._
@@ -39,19 +40,50 @@ class YarnRMCallbackHandler(nmClient: NMClientAsync,
                             env: String,
                             awsEnv: String,
                             config: ClusterConfig,
-                            executorJar: LocalResource) extends AMRMClientAsync.CallbackHandler {
+                            executorJar: LocalResource) extends AMRMClientAsync.CallbackHandler with Logging {
 
 
   val gson:Gson = new Gson()
   private val containersIdsToTaskIds: concurrent.Map[Long, String] = new ConcurrentHashMap[Long, String].asScala
+  private val completedContainersAndTaskIds: concurrent.Map[Long, String] = new ConcurrentHashMap[Long, String].asScala
+  private val failedTasksCounter: concurrent.Map[String, Int] = new ConcurrentHashMap[String, Int].asScala
+
 
   override def onError(e: Throwable): Unit = ???
 
   override def onShutdownRequest(): Unit = ???
 
-  override def onContainersCompleted(statuses: util.List[ContainerStatus]): Unit = ???
+  val MAX_ATTEMPTS_PER_TASK = 3
 
-  override def getProgress: Float = ???
+  override def onContainersCompleted(statuses: util.List[ContainerStatus]): Unit = {
+    for (status <- statuses.asScala) {
+      if (status.getState == ContainerState.COMPLETE) {
+        val containerId = status.getContainerId.getContainerId
+        val taskId = containersIdsToTaskIds(containerId)
+        if (status.getExitStatus == 0) {
+          completedContainersAndTaskIds.put(containerId, taskId)
+          log.info(s"Container $containerId completed with task $taskId with success.")
+        } else {
+          log.warn(s"Container $containerId completed with task $taskId with failed status code (${status.getExitStatus}.")
+          val failedTries = failedTasksCounter.getOrElse(taskId, 0)
+          if (failedTries < MAX_ATTEMPTS_PER_TASK) {
+            // TODO: notify and ask for a new container
+            log.info("Retrying task")
+          } else {
+            log.error(s"Already tried task $taskId $MAX_ATTEMPTS_PER_TASK times. Time to say Bye-Bye.")
+            // TODO: die already
+          }
+        }
+      }
+    }
+    if (getProgress == 1F) {
+      log.info("Finished all tasks successfully! Wow!")
+    }
+  }
+
+  override def getProgress: Float = {
+    jobManager.registeredActions.size.toFloat / completedContainersAndTaskIds.size
+  }
 
   override def onNodesUpdated(updatedNodes: util.List[NodeReport]): Unit = {
   }
@@ -59,7 +91,7 @@ class YarnRMCallbackHandler(nmClient: NMClientAsync,
   override def onContainersAllocated(containers: util.List[Container]): Unit = {
 
     for (container <- containers.asScala) { // Launch container by create ContainerLaunchContext
-      val containerTask = Future {
+      val containerTask = Future[String] {
 
         val actionData = jobManager.getNextActionData
         val taskData = DataLoader.getTaskData(actionData, env)
@@ -79,6 +111,7 @@ class YarnRMCallbackHandler(nmClient: NMClientAsync,
         ))
 
         nmClient.startContainerAsync(container, ctx)
+        actionData.id
       }
 
       containerTask onComplete {
@@ -86,8 +119,8 @@ class YarnRMCallbackHandler(nmClient: NMClientAsync,
           println(s"launching container failed: ${t.getMessage}")
         }
 
-        case Success(ts) => {
-          containersIdsToTaskIds.put(container.getId.getContainerId, actionData.id)
+        case Success(actionDataId) => {
+          containersIdsToTaskIds.put(container.getId.getContainerId, actionDataId)
           println(s"launching container succeeded: ${container.getId}")
         }
       }

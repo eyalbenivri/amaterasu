@@ -19,17 +19,24 @@ package org.apache.amaterasu.leader.yarn
 import java.nio.ByteBuffer
 import java.util
 
+import org.apache.amaterasu.common.logging.Logging
 import org.apache.hadoop.yarn.api.records.{ContainerId, ContainerStatus}
 import org.apache.hadoop.yarn.client.api.async.NMClientAsync
 
 
-class YarnNMCallbackHandler extends NMClientAsync.CallbackHandler {
+class YarnNMCallbackHandler extends NMClientAsync.CallbackHandler with Logging {
 
-  override def onStartContainerError(containerId: ContainerId, t: Throwable): Unit = ???
+  override def onStartContainerError(containerId: ContainerId, t: Throwable): Unit = {
+    log.error(s"Container ${containerId.getContainerId} couldn't start.", t)
+  }
 
-  override def onGetContainerStatusError(containerId: ContainerId, t: Throwable): Unit = ???
+  override def onGetContainerStatusError(containerId: ContainerId, t: Throwable): Unit = {
+    log.error(s"Couldn't get status from container ${containerId.getContainerId}.", t)
+  }
 
-  override def onContainerStatusReceived(containerId: ContainerId, containerStatus: ContainerStatus): Unit = ???
+  override def onContainerStatusReceived(containerId: ContainerId, containerStatus: ContainerStatus): Unit = {
+    log.info(s"Container ${containerId.getContainerId} has status of ${containerStatus.getState}")
+  }
 
   override def onContainerStarted(containerId: ContainerId, allServiceResponse: util.Map[String, ByteBuffer]): Unit = ???
 
