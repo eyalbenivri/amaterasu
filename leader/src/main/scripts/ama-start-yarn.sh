@@ -3,11 +3,6 @@
 BASEDIR=$(dirname "$0")
 
 export AMA_NODE="$(hostname)"
-#pushd $BASEDIR >/dev/null
-#cd /mesos-dependencies/ && nohup java -cp ${BASEDIR}/amaterasu-assembly-0.1.0.jar -Djava.library.path=/usr/lib org.apache.amaterasu.utilities.HttpServer &
-#SERVER_PID=$!
-
-
 
 echo "serving amaterasu from /ama/lib on user supplied port"
 popd >/dev/null
@@ -83,13 +78,15 @@ esac
 done
 
 echo "repo: ${REPO} "
-CMD="java -cp ${BASEDIR}/bin/*.jar -Djava.library.path=/usr/lib org.apache.amaterasu.leader.yarn.JobLauncher --home ${BASEDIR} " #--repo "https://github.com/roadan/amaterasu-job-sample.git" --branch master
+CMD="yarn jar ${BASEDIR}/bin/*.jar -Djava.library.path=/usr/lib org.apache.amaterasu.leader.yarn.YarnJobLauncher --home ${BASEDIR} " #--repo "https://github.com/roadan/amaterasu-job-sample.git" --branch master
 
 if [ -n "$REPO" ]; then
+    echo "repo is ${REPO}"
     CMD+=" --repo ${REPO}"
 fi
 
 if [ -n "$BRANCH" ]; then
+    echo "branch is ${BRANCH}"
     CMD+=" --branch ${BRANCH}"
 fi
 
