@@ -79,11 +79,15 @@ object YarnJobLauncher extends BaseJobLauncher with Logging {
     }
 
     // get version of build
-    val version = this.getClass.getPackage.getImplementationVersion
+    val version = config.version
 
     // get local resources pointers that will be set on the master container env
-    val leaderJar: LocalResource = setLocalResourceFromPath(Path.mergePaths(jarPathQualified, new Path(s"bin/leader-$version-all.jar")))
-    val propFile: LocalResource = setLocalResourceFromPath(Path.mergePaths(jarPathQualified, new Path(s"amaterasu.propertis")))
+    val leaderJarPath = s"${arguments.home}/bin/leader-$version-incubating-all.jar"
+    println(s"Leader Jar path is '$leaderJarPath'")
+    val mergedPath = Path.mergePaths(jarPathQualified, new Path(leaderJarPath))
+    println(mergedPath.getName)
+    val leaderJar: LocalResource = setLocalResourceFromPath(mergedPath)
+    val propFile: LocalResource = setLocalResourceFromPath(Path.mergePaths(jarPathQualified, new Path(s"${arguments.home}/amaterasu.properties")))
 
     // set local resource on master container
     amContainer.setLocalResources(mutable.HashMap[String, LocalResource](
@@ -92,11 +96,11 @@ object YarnJobLauncher extends BaseJobLauncher with Logging {
     ))
 
     // Setup CLASSPATH for ApplicationMaster
-    var appMasterEnv = new mutable.HashMap[String, String]()
-    for (c <- conf.getStrings(YarnConfiguration.YARN_APPLICATION_CLASSPATH,
-      YarnConfiguration.DEFAULT_YARN_APPLICATION_CLASSPATH:_*)) {
-      appMasterEnv.add((Environment.CLASSPATH.name, c.trim))
-    }
+    val appMasterEnv = new mutable.HashMap[String, String]()
+//    for (c <- conf.getStrings(YarnConfiguration.YARN_APPLICATION_CLASSPATH,
+//      YarnConfiguration.DEFAULT_YARN_APPLICATION_CLASSPATH:_*)) {
+//      appMasterEnv.add((Environment.CLASSPATH.name, c.trim))
+//    }
     appMasterEnv.add((Environment.CLASSPATH.name, Environment.PWD.$ + File.separator + "*"))
     amContainer.setEnvironment(appMasterEnv)
 

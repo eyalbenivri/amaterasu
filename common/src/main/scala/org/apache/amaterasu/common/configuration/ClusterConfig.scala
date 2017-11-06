@@ -26,6 +26,7 @@ class ClusterConfig extends Logging {
 
   val DEFAULT_FILE = getClass().getResourceAsStream("/src/main/scripts/amaterasu.properties")
   //val DEFAULT_FILE = getClass().getResourceAsStream("/amaterasu.properties")
+  var version: String = ""
   var user: String = ""
   var zk: String = ""
   var master: String = "127.0.0.1"
@@ -158,6 +159,7 @@ class ClusterConfig extends Logging {
     props.load(file)
     file.close()
 
+    if (props.containsKey("version")) version = props.getProperty("version")
     if (props.containsKey("user")) user = props.getProperty("user")
     if (props.containsKey("zk")) zk = props.getProperty("zk")
     if (props.containsKey("master")) master = props.getProperty("master")
