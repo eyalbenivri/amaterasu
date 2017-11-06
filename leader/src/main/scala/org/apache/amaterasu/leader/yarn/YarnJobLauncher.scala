@@ -98,10 +98,10 @@ object YarnJobLauncher extends BaseJobLauncher with Logging {
 
     // Setup CLASSPATH for ApplicationMaster
     val appMasterEnv = new java.util.HashMap[String, String]
-//    for (c <- conf.getStrings(YarnConfiguration.YARN_APPLICATION_CLASSPATH,
-//      YarnConfiguration.DEFAULT_YARN_APPLICATION_CLASSPATH:_*)) {
-//      appMasterEnv.add((Environment.CLASSPATH.name, c.trim))
-//    }
+    for (c <- conf.getStrings(YarnConfiguration.YARN_APPLICATION_CLASSPATH,
+      YarnConfiguration.DEFAULT_YARN_APPLICATION_CLASSPATH:_*)) {
+      appMasterEnv.put(Environment.CLASSPATH.name, c.trim)
+    }
 
     appMasterEnv.put(Environment.CLASSPATH.name, Environment.PWD.$ + File.separator + "*")
     amContainer.setEnvironment(appMasterEnv)

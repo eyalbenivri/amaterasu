@@ -11,7 +11,11 @@ case class Args(
                  home: String = ""
                ) {
   def toCmdString: String = {
-    s""" --repo $repo --branch $branch --env $env --name $name --jobId $jobId --report $report --home $home"""
+    var cmd = s""" --repo $repo --branch $branch --env $env --name $name --report $report --home $home"""
+    if(jobId != null && !jobId.isEmpty) {
+      cmd += s" --job-id $jobId"
+    }
+    cmd
   }
 
 }
