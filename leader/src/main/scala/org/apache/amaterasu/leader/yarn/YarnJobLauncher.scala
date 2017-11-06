@@ -18,11 +18,11 @@ package org.apache.amaterasu.leader.yarn
 
 import java.io.File
 import java.util.Collections
+import java.util.concurrent.ConcurrentHashMap
 
 import org.apache.amaterasu.leader.utilities.{Args, BaseJobLauncher}
 import org.apache.amaterasu.common.configuration.ClusterConfig
 import org.apache.amaterasu.common.logging.Logging
-
 import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.hadoop.yarn.api.ApplicationConstants.Environment
 import org.apache.hadoop.yarn.api.records.{LocalResource, _}
@@ -30,6 +30,7 @@ import org.apache.hadoop.yarn.client.api.YarnClient
 import org.apache.hadoop.yarn.conf.YarnConfiguration
 import org.apache.hadoop.yarn.util.{ConverterUtils, Records}
 
+import scala.collection.JavaConverters._
 import scala.collection.JavaConversions._
 import scala.collection.mutable
 
@@ -96,12 +97,13 @@ object YarnJobLauncher extends BaseJobLauncher with Logging {
     ))
 
     // Setup CLASSPATH for ApplicationMaster
-    val appMasterEnv = new mutable.HashMap[String, String]()
+    val appMasterEnv = new java.util.HashMap[String, String]
 //    for (c <- conf.getStrings(YarnConfiguration.YARN_APPLICATION_CLASSPATH,
 //      YarnConfiguration.DEFAULT_YARN_APPLICATION_CLASSPATH:_*)) {
 //      appMasterEnv.add((Environment.CLASSPATH.name, c.trim))
 //    }
-    appMasterEnv.add((Environment.CLASSPATH.name, Environment.PWD.$ + File.separator + "*"))
+
+    appMasterEnv.put(Environment.CLASSPATH.name, Environment.PWD.$ + File.separator + "*")
     amContainer.setEnvironment(appMasterEnv)
 
     // Set up resource type requirements for ApplicationMaster
