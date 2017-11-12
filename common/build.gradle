@@ -46,6 +46,7 @@ dependencies {
     compile group: 'org.apache.hadoop', name: 'hadoop-yarn-client', version: '2.7.3'
     compile group: 'org.apache.hadoop', name: 'hadoop-common', version: '2.7.3'
     compile group: 'org.apache.hadoop', name: 'hadoop-yarn-api', version: '2.7.3'
+    compile group: 'org.apache.hadoop', name: 'hadoop-hdfs', version: '2.7.3'
 
     testCompile "gradle.plugin.com.github.maiflai:gradle-scalatest:0.14"
     testRuntime 'org.pegdown:pegdown:1.1.0'

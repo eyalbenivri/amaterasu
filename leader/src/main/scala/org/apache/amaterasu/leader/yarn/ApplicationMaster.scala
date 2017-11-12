@@ -26,6 +26,7 @@ import org.apache.amaterasu.common.execution.actions.NotificationLevel.Notificat
 import org.apache.amaterasu.common.logging.Logging
 import org.apache.amaterasu.leader.execution.{JobLoader, JobManager}
 import org.apache.amaterasu.leader.utilities.{Args, BaseJobLauncher}
+import org.apache.amaterasu.leader.yarn.YarnJobLauncher.fs
 import org.apache.curator.framework.CuratorFramework
 import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.hadoop.net.NetUtils
@@ -39,7 +40,8 @@ import org.apache.hadoop.yarn.util.{ConverterUtils, Records}
 import scala.collection.JavaConverters._
 import scala.collection.concurrent
 
-class ApplicationMaster extends Logging {
+class ApplicationMaster(propsPath: String) extends Logging {
+
   private var jobManager: JobManager = _
   private var client: CuratorFramework = _
   private var config: ClusterConfig = _
@@ -58,13 +60,25 @@ class ApplicationMaster extends Logging {
   private val executionMap: concurrent.Map[String, concurrent.Map[String, ActionStatus]] = new ConcurrentHashMap[String, concurrent.Map[String, ActionStatus]].asScala
   private val lock = new ReentrantLock()
 
+  import org.apache.hadoop.fs.FSDataInputStream
+  import org.apache.hadoop.fs.FileSystem
+
   val conf: YarnConfiguration = new YarnConfiguration()
+  conf.addResource(new Path("/etc/hadoop/conf/core-site.xml"))
+  conf.addResource(new Path("/etc/hadoop/conf/hdfs-site.xml"))
 
   val nmClient: NMClientAsync = new NMClientAsyncImpl(new YarnNMCallbackHandler())
 
   // no need for hdfs double check (nod to Aaron Rodgers)
   // jars on HDFS should have been verified by the YARN client
   fs = FileSystem.get(conf)
+
+  val hdfsPropertiesPath = fs.makeQualified(new Path(propsPath))
+
+
+  val props = fs.open(hdfsPropertiesPath)
+  config = ClusterConfig(props)
+
   val jarPath = new Path(config.YARN.hdfsJarsPath)
   val jarPathQualified = fs.makeQualified(jarPath)
   val executorJar = setLocalResourceFromPath(Path.mergePaths(jarPathQualified, new Path("dist/executor-$version-all.jar")))
@@ -87,7 +101,7 @@ class ApplicationMaster extends Logging {
     fileResource
   }
 
-  def execute(args: Args, clusterConfig: ClusterConfig): Unit = {
+  def execute(jobId: String): Unit = {
     // Initialize clients to ResourceManager and NodeManagers
     rmClient.init(conf)
     rmClient.start()
@@ -102,7 +116,7 @@ class ApplicationMaster extends Logging {
 
     val appMasterHostname = NetUtils.getHostname
     rmClient.registerApplicationMaster(appMasterHostname, -1, "")
-    register(args.jobId)
+    register(jobId)
 
     log.debug("registerApplicationMaster 1")
 
@@ -180,10 +194,9 @@ class ApplicationMaster extends Logging {
   }
 }
 
-object ApplicationMaster extends BaseJobLauncher  {
+object ApplicationMaster extends App {
 
-  override def run(arguments: Args, config: ClusterConfig, resume: Boolean) = {
-    val appMaster = new ApplicationMaster()
-    appMaster.execute(arguments, config)
-  }
+    val appMaster = new ApplicationMaster(args(0))
+    appMaster.execute(args(1))
+
 }

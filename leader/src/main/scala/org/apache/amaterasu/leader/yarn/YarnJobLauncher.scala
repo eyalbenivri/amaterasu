@@ -16,7 +16,8 @@
  */
 package org.apache.amaterasu.leader.yarn
 
-import java.io.File
+import java.io.{File, IOException}
+import java.nio.ByteBuffer
 import java.util.Collections
 import java.util.concurrent.ConcurrentHashMap
 
@@ -24,6 +25,8 @@ import org.apache.amaterasu.leader.utilities.{Args, BaseJobLauncher}
 import org.apache.amaterasu.common.configuration.ClusterConfig
 import org.apache.amaterasu.common.logging.Logging
 import org.apache.hadoop.fs.{FileSystem, Path}
+import org.apache.hadoop.io.DataOutputBuffer
+import org.apache.hadoop.security.{Credentials, UserGroupInformation}
 import org.apache.hadoop.yarn.api.ApplicationConstants.Environment
 import org.apache.hadoop.yarn.api.records.{LocalResource, _}
 import org.apache.hadoop.yarn.client.api.YarnClient
@@ -40,7 +43,7 @@ import scala.collection.mutable
   */
 object YarnJobLauncher extends BaseJobLauncher with Logging {
   var configFile: String = _
-  var fs:FileSystem = _
+  var fs: FileSystem = _
 
   def setLocalResourceFromPath(path: Path): LocalResource = {
     val stat = fs.getFileStatus(path)
@@ -65,30 +68,35 @@ object YarnJobLauncher extends BaseJobLauncher with Logging {
 
     // Set up the container launch context for the application master
     val amContainer = Records.newRecord(classOf[ContainerLaunchContext])
-    amContainer.setCommands(Collections.singletonList("$JAVA_HOME/bin/java " +
-      "org.apache.amaterasu.leader.yarn.ApplicationMaster " + arguments.toCmdString
-    ))
 
     // Setup jars on hdfs
     fs = FileSystem.get(conf)
     val jarPath = new Path(config.YARN.hdfsJarsPath)
     val jarPathQualified = fs.makeQualified(jarPath)
 
+    amContainer.setCommands(Collections.singletonList("$JAVA_HOME/bin/java " +
+      s"org.apache.amaterasu.leader.yarn.ApplicationMaster $jarPathQualified/amaterasu.properties ${arguments.jobId}"
+    ))
+
     if (!fs.exists(jarPathQualified)) {
-      fs.mkdirs(jarPathQualified)
-      fs.copyFromLocalFile(false, true, new Path(arguments.home), jarPathQualified)
+      val home = new File(arguments.home)
+      home.listFiles().foreach(f =>{
+        fs.mkdirs(jarPathQualified)
+        fs.copyFromLocalFile(false, true, new Path(f.getAbsolutePath), jarPathQualified)
+      })
+
     }
 
     // get version of build
     val version = config.version
 
     // get local resources pointers that will be set on the master container env
-    val leaderJarPath = s"${arguments.home}/bin/leader-$version-incubating-all.jar"
+    val leaderJarPath = s"/bin/leader-$version-incubating-all.jar"
     println(s"Leader Jar path is '$leaderJarPath'")
     val mergedPath = Path.mergePaths(jarPathQualified, new Path(leaderJarPath))
     println(mergedPath.getName)
     val leaderJar: LocalResource = setLocalResourceFromPath(mergedPath)
-    val propFile: LocalResource = setLocalResourceFromPath(Path.mergePaths(jarPathQualified, new Path(s"${arguments.home}/amaterasu.properties")))
+    val propFile: LocalResource = setLocalResourceFromPath(Path.mergePaths(jarPathQualified, new Path(s"/amaterasu.properties")))
 
     // set local resource on master container
     amContainer.setLocalResources(mutable.HashMap[String, LocalResource](
@@ -99,17 +107,38 @@ object YarnJobLauncher extends BaseJobLauncher with Logging {
     // Setup CLASSPATH for ApplicationMaster
     val appMasterEnv = new java.util.HashMap[String, String]
     for (c <- conf.getStrings(YarnConfiguration.YARN_APPLICATION_CLASSPATH,
-      YarnConfiguration.DEFAULT_YARN_APPLICATION_CLASSPATH:_*)) {
+      YarnConfiguration.DEFAULT_YARN_APPLICATION_CLASSPATH: _*)) {
       appMasterEnv.put(Environment.CLASSPATH.name, c.trim)
     }
 
     appMasterEnv.put(Environment.CLASSPATH.name, Environment.PWD.$ + File.separator + "*")
+
+    appMasterEnv.put("AMA_CONF_PATH", s"${config.YARN.hdfsJarsPath}/amaterasu.properties")
     amContainer.setEnvironment(appMasterEnv)
 
     // Set up resource type requirements for ApplicationMaster
     val capability = Records.newRecord(classOf[Resource])
     capability.setMemory(config.YARN.Master.memoryMB)
     capability.setVirtualCores(config.YARN.Master.cores)
+
+    //TODO: verify /w YARN team
+    println("===> Setting up sec")
+    // Setup security tokens
+    if (UserGroupInformation.isSecurityEnabled) { // Note: Credentials class is marked as LimitedPrivate for HDFS and MapReduce
+      println("===> Sec enabled")
+      val credentials = new Credentials
+      val tokenRenewer = conf.get(YarnConfiguration.RM_PRINCIPAL)
+      if (tokenRenewer == null || tokenRenewer.length == 0) throw new IOException("Can't get Master Kerberos principal for the RM to use as renewer")
+      // For now, only getting tokens for the default file-system.
+      val tokens = fs.addDelegationTokens(tokenRenewer, credentials)
+      if (tokens != null) for (token <- tokens) {
+        println("===> Got dt for " + fs.getUri + "; " + token)
+      }
+      val dob = new DataOutputBuffer
+      credentials.writeTokenStorageToStream(dob)
+      val fsTokens = ByteBuffer.wrap(dob.getData, 0, dob.getLength)
+      amContainer.setTokens(fsTokens)
+    }
 
     // Finally, set-up ApplicationSubmissionContext for the application
     val appContext = app.getApplicationSubmissionContext
@@ -131,10 +160,10 @@ object YarnJobLauncher extends BaseJobLauncher with Logging {
       Thread.sleep(100)
       appReport = client.getApplicationReport(appId)
       appState = appReport.getYarnApplicationState
-      log.debug(s"Application $appId with is $appState")
+
+      println(s"Application $appId with is $appState user is ${appReport.getUser}")
     }
 
     log.info(s"Application $appId finished with state $appState at ${appReport.getFinishTime}")
   }
 }
-
