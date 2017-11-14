@@ -16,19 +16,20 @@
  */
 package org.apache.amaterasu.leader.yarn
 
+import java.io.{File, FileInputStream, InputStream}
 import java.util.concurrent.locks.ReentrantLock
 import java.util.concurrent.{ConcurrentHashMap, LinkedBlockingQueue}
 
+import com.google.gson.Gson
 import org.apache.amaterasu.common.configuration.ClusterConfig
 import org.apache.amaterasu.common.configuration.enums.ActionStatus.ActionStatus
 import org.apache.amaterasu.common.dataobjects.ActionData
 import org.apache.amaterasu.common.execution.actions.NotificationLevel.NotificationLevel
 import org.apache.amaterasu.common.logging.Logging
 import org.apache.amaterasu.leader.execution.{JobLoader, JobManager}
-import org.apache.amaterasu.leader.utilities.{Args, BaseJobLauncher}
-import org.apache.amaterasu.leader.yarn.YarnJobLauncher.fs
 import org.apache.curator.framework.CuratorFramework
-import org.apache.hadoop.fs.{FileSystem, Path}
+import org.apache.hadoop.fs.{FileSystem, LocalFileSystem, Path}
+import org.apache.hadoop.hdfs.DistributedFileSystem
 import org.apache.hadoop.net.NetUtils
 import org.apache.hadoop.yarn.api.records._
 import org.apache.hadoop.yarn.client.api.AMRMClient.ContainerRequest
@@ -40,7 +41,7 @@ import org.apache.hadoop.yarn.util.{ConverterUtils, Records}
 import scala.collection.JavaConverters._
 import scala.collection.concurrent
 
-class ApplicationMaster(propsPath: String) extends Logging {
+class ApplicationMaster() extends Logging {
 
   private var jobManager: JobManager = _
   private var client: CuratorFramework = _
@@ -60,12 +61,13 @@ class ApplicationMaster(propsPath: String) extends Logging {
   private val executionMap: concurrent.Map[String, concurrent.Map[String, ActionStatus]] = new ConcurrentHashMap[String, concurrent.Map[String, ActionStatus]].asScala
   private val lock = new ReentrantLock()
 
-  import org.apache.hadoop.fs.FSDataInputStream
   import org.apache.hadoop.fs.FileSystem
 
   val conf: YarnConfiguration = new YarnConfiguration()
   conf.addResource(new Path("/etc/hadoop/conf/core-site.xml"))
   conf.addResource(new Path("/etc/hadoop/conf/hdfs-site.xml"))
+  conf.set("fs.hdfs.impl", classOf[DistributedFileSystem].getName)
+  conf.set("fs.file.impl", classOf[LocalFileSystem].getName)
 
   val nmClient: NMClientAsync = new NMClientAsyncImpl(new YarnNMCallbackHandler())
 
@@ -73,22 +75,27 @@ class ApplicationMaster(propsPath: String) extends Logging {
   // jars on HDFS should have been verified by the YARN client
   fs = FileSystem.get(conf)
 
-  val hdfsPropertiesPath = fs.makeQualified(new Path(propsPath))
-
-
-  val props = fs.open(hdfsPropertiesPath)
+//  val file = new File(getClass.getProtectionDomain.getCodeSource.getLocation.toURI.getPath)
+  val propPath = System.getenv("PWD") + "/amaterasu.properties"
+  log.info(s"log: Properties file in ${propPath}")
+  println(s"Properties file in ${propPath}")
+  val props: InputStream = new FileInputStream(new File(propPath))
   config = ClusterConfig(props)
 
   val jarPath = new Path(config.YARN.hdfsJarsPath)
   val jarPathQualified = fs.makeQualified(jarPath)
-  val executorJar = setLocalResourceFromPath(Path.mergePaths(jarPathQualified, new Path("dist/executor-$version-all.jar")))
+  val version = config.version
+  val executorPath = Path.mergePaths(jarPathQualified, new Path(s"/dist/executor-${version}-all.jar"))
+  log.info(s"log: Executor jar in ${executorPath}")
+  println(s"Executor jar in ${executorPath}")
+  val executorJar = setLocalResourceFromPath(executorPath)
 
   //TODO: Eyal, verify we got everything inited here
   val allocListener = new YarnRMCallbackHandler(nmClient, jobManager, env, awsEnv, config, executorJar)
   val rmClient: AMRMClientAsync[ContainerRequest] = AMRMClientAsync.createAMRMClientAsync(1000, allocListener)
   //val rmClient: AMRMClient[ContainerRequest] = AMRMClient.createAMRMClient()
 
-  //val gson:Gson = new Gson()
+  val gson:Gson = new Gson()
 
   def setLocalResourceFromPath(path: Path): LocalResource = {
     val stat = fs.getFileStatus(path)
@@ -130,43 +137,16 @@ class ApplicationMaster(propsPath: String) extends Logging {
     val version = this.getClass.getPackage.getImplementationVersion
 
 
-    while (!jobManager.outOfActions) {
-
+    for (i <- 0 until jobManager.registeredActions.size) {
       // Priority for worker containers - priorities are intra-application
       val priority: Priority = Records.newRecord(classOf[Priority])
       priority.setPriority(askedContainers)
       val containerAsk = new ContainerRequest(capability, null, null, priority)
-
+      println(s"Asking for container $i")
       rmClient.addContainerRequest(containerAsk)
-
-      //        val ctx = Records.newRecord(classOf[ContainerLaunchContext])
-//        val command = s"""$awsEnv env AMA_NODE=${sys.env("AMA_NODE")}
-//             | env SPARK_EXECUTOR_URI=http://${sys.env("AMA_NODE")}:${config.Webserver.Port}/dist/spark-${config.Webserver.sparkVersion}.tgz
-//             | java -cp executor-0.2.0-all.jar:spark-${config.Webserver.sparkVersion}/lib/*
-//             | -Dscala.usejavacp=true
-//             | -Djava.library.path=/usr/lib org.apache.amaterasu.executor.yarn.executors.ActionsExecutorLauncher
-//             | ${jobManager.jobId} ${config.master} ${actionData.name} ${gson.toJson(taskData)} ${gson.toJson(execData)}""".stripMargin
-//        ctx.setCommands(Collections.singletonList(command))
-//
-//        ctx.setLocalResources(Map[String, LocalResource] (
-//          "executor.jar" -> executorJar
-//         ))
-//        nmClient.startContainer(container, ctx)
-//        containersIdsToTaskIds.put(container.getId.getContainerId, actionData.id)
-//        askedContainers += 1
-//      }
     }
-
-    // TODO: Eyal, move this to the async API
-//    while(completedContainers < askedContainers) {
-//      val response = rmClient.allocate(completedContainers / askedContainers)
-//      for (status <- response.getCompletedContainersStatuses) {
-//        completedContainers += 1
-//        log.info("Completed container " + status.getContainerId)
-//      }
-//      Thread.sleep(100)
-//    }
   }
+
 
   def register(jobId: String) = {
     if (!resume) {
@@ -196,7 +176,7 @@ class ApplicationMaster(propsPath: String) extends Logging {
 
 object ApplicationMaster extends App {
 
-    val appMaster = new ApplicationMaster(args(0))
-    appMaster.execute(args(1))
+    val appMaster = new ApplicationMaster()
+    appMaster.execute(args(0))
 
 }
