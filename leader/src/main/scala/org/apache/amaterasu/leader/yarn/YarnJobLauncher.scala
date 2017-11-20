@@ -19,21 +19,20 @@ package org.apache.amaterasu.leader.yarn
 import java.io.{File, IOException}
 import java.nio.ByteBuffer
 import java.util.Collections
-import java.util.concurrent.ConcurrentHashMap
 
-import org.apache.amaterasu.leader.utilities.{Args, BaseJobLauncher}
 import org.apache.amaterasu.common.configuration.ClusterConfig
 import org.apache.amaterasu.common.logging.Logging
+import org.apache.amaterasu.leader.utilities.{Args, BaseJobLauncher}
 import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.hadoop.io.DataOutputBuffer
 import org.apache.hadoop.security.{Credentials, UserGroupInformation}
+import org.apache.hadoop.yarn.api.ApplicationConstants
 import org.apache.hadoop.yarn.api.ApplicationConstants.Environment
 import org.apache.hadoop.yarn.api.records.{LocalResource, _}
 import org.apache.hadoop.yarn.client.api.YarnClient
 import org.apache.hadoop.yarn.conf.YarnConfiguration
 import org.apache.hadoop.yarn.util.{ConverterUtils, Records}
 
-import scala.collection.JavaConverters._
 import scala.collection.JavaConversions._
 import scala.collection.mutable
 
@@ -59,7 +58,7 @@ object YarnJobLauncher extends BaseJobLauncher with Logging {
   override def run(arguments: Args, config: ClusterConfig, resume: Boolean): Unit = {
     // Create YARN Client
     val conf = new YarnConfiguration()
-    val client = YarnClient.createYarnClient()
+    val client: YarnClient = YarnClient.createYarnClient()
     client.init(conf)
     client.start()
 
@@ -74,9 +73,10 @@ object YarnJobLauncher extends BaseJobLauncher with Logging {
     val jarPath = new Path(config.YARN.hdfsJarsPath)
     val jarPathQualified = fs.makeQualified(jarPath)
 
-    amContainer.setCommands(Collections.singletonList("$JAVA_HOME/bin/java " +
-      s"org.apache.amaterasu.leader.yarn.ApplicationMaster $jarPathQualified/amaterasu.properties ${arguments.jobId}"
-    ))
+    val commands = Collections.singletonList("$JAVA_HOME/bin/java " +
+      s"org.apache.amaterasu.leader.yarn.ApplicationMaster ${arguments.jobId} 1>" + ApplicationConstants.LOG_DIR_EXPANSION_VAR + "/AppMaster.stdout 2>" + ApplicationConstants.LOG_DIR_EXPANSION_VAR + "/AppMaster.stderr"
+    )
+    amContainer.setCommands(commands)
 
     if (!fs.exists(jarPathQualified)) {
       val home = new File(arguments.home)
@@ -91,7 +91,7 @@ object YarnJobLauncher extends BaseJobLauncher with Logging {
     val version = config.version
 
     // get local resources pointers that will be set on the master container env
-    val leaderJarPath = s"/bin/leader-$version-incubating-all.jar"
+    val leaderJarPath = s"/bin/leader-$version-all.jar"
     println(s"Leader Jar path is '$leaderJarPath'")
     val mergedPath = Path.mergePaths(jarPathQualified, new Path(leaderJarPath))
     println(mergedPath.getName)
@@ -99,10 +99,10 @@ object YarnJobLauncher extends BaseJobLauncher with Logging {
     val propFile: LocalResource = setLocalResourceFromPath(Path.mergePaths(jarPathQualified, new Path(s"/amaterasu.properties")))
 
     // set local resource on master container
-    amContainer.setLocalResources(mutable.HashMap[String, LocalResource](
-      "leader.jar" -> leaderJar,
-      "amaterasu.properties" -> propFile
-    ))
+    val localResources = new java.util.HashMap[String, LocalResource]
+    localResources.put("leader.jar", leaderJar)
+    localResources.put("amaterasu.properties", propFile)
+    amContainer.setLocalResources(localResources)
 
     // Setup CLASSPATH for ApplicationMaster
     val appMasterEnv = new java.util.HashMap[String, String]

@@ -91,7 +91,7 @@ class YarnRMCallbackHandler(nmClient: NMClientAsync,
   }
 
   override def onContainersAllocated(containers: util.List[Container]): Unit = {
-
+    log.info("containers allocated")
     for (container <- containers.asScala) { // Launch container by create ContainerLaunchContext
       val containerTask = Future[String] {
 
