@@ -40,9 +40,11 @@ import org.apache.hadoop.yarn.util.{ConverterUtils, Records}
 
 import scala.collection.JavaConverters._
 import scala.collection.concurrent
+import org.apache.hadoop.fs.FileSystem
+import org.apache.hadoop.yarn.api.protocolrecords.RegisterApplicationMasterResponse
 
-class ApplicationMaster() extends Logging {
-
+class ApplicationMaster extends Logging {
+  println("ApplicationMaster start")
   private var jobManager: JobManager = _
   private var client: CuratorFramework = _
   private var config: ClusterConfig = _
@@ -60,8 +62,6 @@ class ApplicationMaster() extends Logging {
   //  +-> taskId, actionStatus)
   private val executionMap: concurrent.Map[String, concurrent.Map[String, ActionStatus]] = new ConcurrentHashMap[String, concurrent.Map[String, ActionStatus]].asScala
   private val lock = new ReentrantLock()
-
-  import org.apache.hadoop.fs.FileSystem
 
   val conf: YarnConfiguration = new YarnConfiguration()
   conf.addResource(new Path("/etc/hadoop/conf/core-site.xml"))
@@ -109,6 +109,8 @@ class ApplicationMaster() extends Logging {
   }
 
   def execute(jobId: String): Unit = {
+    println("Started execute")
+
     // Initialize clients to ResourceManager and NodeManagers
     rmClient.init(conf)
     rmClient.start()
@@ -119,23 +121,25 @@ class ApplicationMaster() extends Logging {
 
 
     // Register with ResourceManager
-    log.debug("registerApplicationMaster 0")
-
     val appMasterHostname = NetUtils.getHostname
-    rmClient.registerApplicationMaster(appMasterHostname, -1, "")
+    println("Registering application")
+    val registrationResponse: RegisterApplicationMasterResponse = rmClient.registerApplicationMaster(appMasterHostname, -1, "")
+    println("Registered application")
+    val maxMem = registrationResponse.getMaximumResourceCapability.getMemory
+    println("Max mem capabililty of resources in this cluster " + maxMem)
+    val maxVCores = registrationResponse.getMaximumResourceCapability.getVirtualCores
+    println("Max vcores capabililty of resources in this cluster " + maxVCores)
     register(jobId)
-
-    log.debug("registerApplicationMaster 1")
+    println(s"Created jobManager. jobManager.registeredActions.size: ${jobManager.registeredActions.size}")
 
     // Resource requirements for worker containers
     val capability = Records.newRecord(classOf[Resource])
-    capability.setMemory(config.taskMem)
+    capability.setMemory(Math.min(config.taskMem, maxMem))
     capability.setVirtualCores(1)
 
     var askedContainers = 0
     var completedContainers = 0
     val version = this.getClass.getPackage.getImplementationVersion
-
 
     for (i <- 0 until jobManager.registeredActions.size) {
       // Priority for worker containers - priorities are intra-application
@@ -144,7 +148,9 @@ class ApplicationMaster() extends Logging {
       val containerAsk = new ContainerRequest(capability, null, null, priority)
       println(s"Asking for container $i")
       rmClient.addContainerRequest(containerAsk)
+      println(s"request for container $i sent")
     }
+    println("Finished asking for containers")
   }
 
 
