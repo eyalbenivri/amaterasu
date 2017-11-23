@@ -146,6 +146,7 @@ object YarnJobLauncher extends BaseJobLauncher with Logging {
     appContext.setAMContainerSpec(amContainer)
     appContext.setResource(capability)
     appContext.setQueue(config.YARN.queue) // queue
+    appContext.setPriority(Priority.newInstance(1))
 
     // Submit application
     val appId = appContext.getApplicationId

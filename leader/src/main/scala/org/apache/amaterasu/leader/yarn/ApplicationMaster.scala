@@ -55,6 +55,15 @@ class ApplicationMaster extends Logging {
   private var reportLevel: NotificationLevel = _
   private var fs:FileSystem = _
   private var awsEnv: String = ""
+  private var conf: YarnConfiguration = _
+  private var propPath: String = ""
+  private var props: InputStream = _
+  private var jarPath:Path = _
+  private var jarPathQualified:Path = _
+  private var version: String = ""
+  private var executorPath: Path = _
+  private var executorJar: LocalResource = _
+
 
   // this map holds the following structure:
   // slaveId
@@ -63,36 +72,11 @@ class ApplicationMaster extends Logging {
   private val executionMap: concurrent.Map[String, concurrent.Map[String, ActionStatus]] = new ConcurrentHashMap[String, concurrent.Map[String, ActionStatus]].asScala
   private val lock = new ReentrantLock()
 
-  val conf: YarnConfiguration = new YarnConfiguration()
-  conf.addResource(new Path("/etc/hadoop/conf/core-site.xml"))
-  conf.addResource(new Path("/etc/hadoop/conf/hdfs-site.xml"))
-  conf.set("fs.hdfs.impl", classOf[DistributedFileSystem].getName)
-  conf.set("fs.file.impl", classOf[LocalFileSystem].getName)
-
-  val nmClient: NMClientAsync = new NMClientAsyncImpl(new YarnNMCallbackHandler())
-
-  // no need for hdfs double check (nod to Aaron Rodgers)
-  // jars on HDFS should have been verified by the YARN client
-  fs = FileSystem.get(conf)
-
-//  val file = new File(getClass.getProtectionDomain.getCodeSource.getLocation.toURI.getPath)
-  val propPath = System.getenv("PWD") + "/amaterasu.properties"
-  log.info(s"log: Properties file in ${propPath}")
-  println(s"Properties file in ${propPath}")
-  val props: InputStream = new FileInputStream(new File(propPath))
-  config = ClusterConfig(props)
-
-  val jarPath = new Path(config.YARN.hdfsJarsPath)
-  val jarPathQualified = fs.makeQualified(jarPath)
-  val version = config.version
-  val executorPath = Path.mergePaths(jarPathQualified, new Path(s"/dist/executor-${version}-all.jar"))
-  log.info(s"log: Executor jar in ${executorPath}")
-  println(s"Executor jar in ${executorPath}")
-  val executorJar = setLocalResourceFromPath(executorPath)
 
   //TODO: Eyal, verify we got everything inited here
-  val allocListener = new YarnRMCallbackHandler(nmClient, jobManager, env, awsEnv, config, executorJar)
-  val rmClient: AMRMClientAsync[ContainerRequest] = AMRMClientAsync.createAMRMClientAsync(1000, allocListener)
+  var nmClient: NMClientAsync = _
+  var allocListener: YarnRMCallbackHandler = _
+  var rmClient: AMRMClientAsync[ContainerRequest] = _
   //val rmClient: AMRMClient[ContainerRequest] = AMRMClient.createAMRMClient()
 
   val gson:Gson = new Gson()
@@ -109,26 +93,55 @@ class ApplicationMaster extends Logging {
   }
 
   def execute(jobId: String): Unit = {
+    conf = new YarnConfiguration()
+    conf.addResource(new Path("/etc/hadoop/conf/core-site.xml"))
+    conf.addResource(new Path("/etc/hadoop/conf/hdfs-site.xml"))
+    conf.set("fs.hdfs.impl", classOf[DistributedFileSystem].getName)
+    conf.set("fs.file.impl", classOf[LocalFileSystem].getName)
+
+    propPath = System.getenv("PWD") + "/amaterasu.properties"
+    props = new FileInputStream(new File(propPath))
+
+
+    // no need for hdfs double check (nod to Aaron Rodgers)
+    // jars on HDFS should have been verified by the YARN client
+    fs = FileSystem.get(conf)
+
+    config = ClusterConfig(props)
+
+    jarPath = new Path(config.YARN.hdfsJarsPath)
+    jarPathQualified = fs.makeQualified(jarPath)
+    jarPathQualified = fs.makeQualified(jarPath)
+
+    this.version = config.version
+
+    executorPath = Path.mergePaths(jarPathQualified, new Path(s"/dist/executor-${this.version}-all.jar"))
+    executorJar = setLocalResourceFromPath(executorPath)
+
     println("Started execute")
 
-    // Initialize clients to ResourceManager and NodeManagers
-    rmClient.init(conf)
-    rmClient.start()
+    nmClient = new NMClientAsyncImpl(new YarnNMCallbackHandler())
 
+    // Initialize clients to ResourceManager and NodeManagers
     nmClient.init(conf)
     nmClient.start()
 
+    allocListener = new YarnRMCallbackHandler(nmClient, jobManager, env, awsEnv, config, executorJar)
+
+    rmClient = AMRMClientAsync.createAMRMClientAsync(1000, allocListener)
+    rmClient.init(conf)
+    rmClient.start()
 
 
     // Register with ResourceManager
     val appMasterHostname = NetUtils.getHostname
     println("Registering application")
-    val registrationResponse: RegisterApplicationMasterResponse = rmClient.registerApplicationMaster(appMasterHostname, -1, "")
+    val registrationResponse: RegisterApplicationMasterResponse = rmClient.registerApplicationMaster(appMasterHostname, 0, "")
     println("Registered application")
     val maxMem = registrationResponse.getMaximumResourceCapability.getMemory
-    println("Max mem capabililty of resources in this cluster " + maxMem)
+    println("Max mem capability of resources in this cluster " + maxMem)
     val maxVCores = registrationResponse.getMaximumResourceCapability.getVirtualCores
-    println("Max vcores capabililty of resources in this cluster " + maxVCores)
+    println("Max vcores capability of resources in this cluster " + maxVCores)
     register(jobId)
     println(s"Created jobManager. jobManager.registeredActions.size: ${jobManager.registeredActions.size}")
 

@@ -51,9 +51,13 @@ class YarnRMCallbackHandler(nmClient: NMClientAsync,
   private val failedTasksCounter: concurrent.Map[String, Int] = new ConcurrentHashMap[String, Int].asScala
 
 
-  override def onError(e: Throwable): Unit = ???
+  override def onError(e: Throwable): Unit = {
+    println(s"ERROR: ${e.getMessage}")
+  }
 
-  override def onShutdownRequest(): Unit = ???
+  override def onShutdownRequest(): Unit = {
+    println("Shutdown requested")
+  }
 
   val MAX_ATTEMPTS_PER_TASK = 3
 
