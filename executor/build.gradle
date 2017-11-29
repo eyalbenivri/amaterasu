@@ -64,8 +64,8 @@ dependencies {
     compile project(':amaterasu-sdk')
 
     //runtime dependency for spark
-    compile ('org.apache.spark:spark-repl_2.11:2.1.1')
-    compile ('org.apache.spark:spark-core_2.11:2.1.1')
+    provided ('org.apache.spark:spark-repl_2.11:2.1.1')
+    provided ('org.apache.spark:spark-core_2.11:2.1.1')
 
     testCompile project(':common')
     testCompile "gradle.plugin.com.github.maiflai:gradle-scalatest:0.14"
