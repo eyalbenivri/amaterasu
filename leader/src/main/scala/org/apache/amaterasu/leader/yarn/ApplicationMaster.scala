@@ -17,6 +17,8 @@
 package org.apache.amaterasu.leader.yarn
 
 import java.io.{File, FileInputStream, InputStream}
+import java.util
+import java.util.Collections
 import java.util.concurrent.locks.ReentrantLock
 import java.util.concurrent.{ConcurrentHashMap, LinkedBlockingQueue}
 
@@ -27,6 +29,7 @@ import org.apache.amaterasu.common.dataobjects.ActionData
 import org.apache.amaterasu.common.execution.actions.NotificationLevel.NotificationLevel
 import org.apache.amaterasu.common.logging.Logging
 import org.apache.amaterasu.leader.execution.{JobLoader, JobManager}
+import org.apache.amaterasu.leader.utilities.DataLoader
 import org.apache.curator.framework.CuratorFramework
 import org.apache.hadoop.fs.{FileSystem, LocalFileSystem, Path}
 import org.apache.hadoop.hdfs.DistributedFileSystem
@@ -41,9 +44,17 @@ import org.apache.hadoop.yarn.util.{ConverterUtils, Records}
 import scala.collection.JavaConverters._
 import scala.collection.concurrent
 import org.apache.hadoop.fs.FileSystem
+import org.apache.hadoop.yarn.api.ApplicationConstants
 import org.apache.hadoop.yarn.api.protocolrecords.RegisterApplicationMasterResponse
 
-class ApplicationMaster extends Logging {
+import scala.collection.concurrent
+import scala.concurrent.Future
+import scala.util.{Failure, Success}
+import scala.concurrent._
+import ExecutionContext.Implicits.global
+
+class ApplicationMaster extends AMRMClientAsync.CallbackHandler with Logging {
+
   println("ApplicationMaster start")
   private var jobManager: JobManager = _
   private var client: CuratorFramework = _
@@ -53,17 +64,21 @@ class ApplicationMaster extends Logging {
   private var branch: String = _
   private var resume: Boolean = false
   private var reportLevel: NotificationLevel = _
-  private var fs:FileSystem = _
+  private var fs: FileSystem = _
   private var awsEnv: String = ""
   private var conf: YarnConfiguration = _
   private var propPath: String = ""
   private var props: InputStream = _
-  private var jarPath:Path = _
-  private var jarPathQualified:Path = _
+  private var jarPath: Path = _
+  private var jarPathQualified: Path = _
   private var version: String = ""
   private var executorPath: Path = _
   private var executorJar: LocalResource = _
-
+  // private val command = "echo I'm running"
+  // val gson:Gson = new Gson()
+  private val containersIdsToTaskIds: concurrent.Map[Long, String] = new ConcurrentHashMap[Long, String].asScala
+  private val completedContainersAndTaskIds: concurrent.Map[Long, String] = new ConcurrentHashMap[Long, String].asScala
+  private val failedTasksCounter: concurrent.Map[String, Int] = new ConcurrentHashMap[String, Int].asScala
 
   // this map holds the following structure:
   // slaveId
@@ -79,7 +94,7 @@ class ApplicationMaster extends Logging {
   var rmClient: AMRMClientAsync[ContainerRequest] = _
   //val rmClient: AMRMClient[ContainerRequest] = AMRMClient.createAMRMClient()
 
-  val gson:Gson = new Gson()
+  val gson: Gson = new Gson()
 
   def setLocalResourceFromPath(path: Path): LocalResource = {
     val stat = fs.getFileStatus(path)
@@ -128,7 +143,7 @@ class ApplicationMaster extends Logging {
 
     allocListener = new YarnRMCallbackHandler(nmClient, jobManager, env, awsEnv, config, executorJar)
 
-    rmClient = AMRMClientAsync.createAMRMClientAsync(1000, allocListener)
+    rmClient = AMRMClientAsync.createAMRMClientAsync(1000, this)
     rmClient.init(conf)
     rmClient.start()
 
@@ -136,18 +151,22 @@ class ApplicationMaster extends Logging {
     // Register with ResourceManager
     val appMasterHostname = NetUtils.getHostname
     println("Registering application")
-    val registrationResponse: RegisterApplicationMasterResponse = rmClient.registerApplicationMaster(appMasterHostname, 0, "")
+
+    var registrationResponse: RegisterApplicationMasterResponse = null
+    //synchronized {
+       rmClient.registerApplicationMaster("", 0, "")
+    //}
     println("Registered application")
-    val maxMem = registrationResponse.getMaximumResourceCapability.getMemory
-    println("Max mem capability of resources in this cluster " + maxMem)
-    val maxVCores = registrationResponse.getMaximumResourceCapability.getVirtualCores
-    println("Max vcores capability of resources in this cluster " + maxVCores)
+//    val maxMem = registrationResponse.getMaximumResourceCapability.getMemory
+//    println("Max mem capability of resources in this cluster " + maxMem)
+//    val maxVCores = registrationResponse.getMaximumResourceCapability.getVirtualCores
+//    println("Max vcores capability of resources in this cluster " + maxVCores)
     register(jobId)
     println(s"Created jobManager. jobManager.registeredActions.size: ${jobManager.registeredActions.size}")
 
     // Resource requirements for worker containers
     val capability = Records.newRecord(classOf[Resource])
-    capability.setMemory(Math.min(config.taskMem, maxMem))
+    capability.setMemory(Math.min(config.taskMem, 256))
     capability.setVirtualCores(1)
 
     var askedContainers = 0
@@ -191,11 +210,89 @@ class ApplicationMaster extends Logging {
     }
     jobManager.start()
   }
+
+  override def onContainersCompleted(statuses: util.List[ContainerStatus]) = ???
+
+  override def getProgress = ???
+
+  override def onNodesUpdated(updatedNodes: util.List[NodeReport]) = ???
+
+  override def onShutdownRequest() = ???
+
+
+  //  override def onContainersAllocated(containers: util.List[Container]) = {
+  //
+  //    import scala.collection.JavaConversions._
+  //    for (container <- containers) {
+  //      try { // Launch container by create ContainerLaunchContext
+  //        val ctx = Records.newRecord(classOf[ContainerLaunchContext])
+  //        ctx.setCommands(Collections.singletonList(command + " 1>" + ApplicationConstants.LOG_DIR_EXPANSION_VAR + "/stdout" + " 2>" + ApplicationConstants.LOG_DIR_EXPANSION_VAR + "/stderr"))
+  //        System.out.println("[AM] Launching container " + container.getId)
+  //        nmClient.startContainerAsync(container, ctx)
+  //      } catch {
+  //        case ex: Exception =>
+  //          System.err.println("[AM] Error launching container " + container.getId + " " + ex)
+  //      }
+  //    }
+  //  }
+
+  override def onContainersAllocated(containers: util.List[Container]): Unit = {
+    log.info("containers allocated")
+    for (container <- containers.asScala) { // Launch container by create ContainerLaunchContext
+      val containerTask = Future[String] {
+
+        val actionData = jobManager.getNextActionData
+        val taskData = DataLoader.getTaskData(actionData, env)
+        val execData = DataLoader.getExecutorData(env)
+
+        val ctx = Records.newRecord(classOf[ContainerLaunchContext])
+        val command =
+          s"""$awsEnv env AMA_NODE=${sys.env("AMA_NODE")}
+
+             | env SPARK_EXECUTOR_URI=http://${sys.env("AMA_NODE")}:${config.Webserver.Port}/dist/spark-${config.Webserver.sparkVersion}
+.tgz
+             | java -cp executor-0.2.0-all.jar:spark-${
+            config.
+              Webserver.sparkVersion
+          }
+/lib/*
+             | -Dscala.usejavacp=true
+             | -Djava.library.path=/usr/lib org.apache.amaterasu.executor.yarn.executors.ActionsExecutorLauncher
+             | ${jobManager.jobId} ${config.master} ${actionData.name} ${
+            gson.
+
+              toJson(taskData)
+          } ${gson.toJson(execData)}""".stripMargin
+        ctx.setCommands(Collections.
+          singletonList(command))
+
+        //        ctx.setLocalResources(Map[String, LocalResource] (
+        //          "executor.jar" -> executorJar
+        //        ))
+
+        nmClient.startContainerAsync(container, ctx)
+        actionData.id
+      }
+
+      containerTask onComplete {
+        case Failure(t) => {
+          println(s"launching container failed: ${t.getMessage}")
+        }
+
+        case Success(actionDataId) => {
+          containersIdsToTaskIds.put(container.getId.getContainerId, actionDataId)
+          println(s"launching container succeeded: ${container.getId}")
+        }
+      }
+    }
+  }
+
+  override def onError(e: Throwable) = ???
 }
 
 object ApplicationMaster extends App {
 
-    val appMaster = new ApplicationMaster()
-    appMaster.execute(args(0))
+  val appMaster = new ApplicationMaster()
+  appMaster.execute(args(0))
 
 }

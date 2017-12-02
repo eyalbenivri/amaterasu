@@ -124,21 +124,21 @@ object YarnJobLauncher extends BaseJobLauncher with Logging {
     //TODO: verify /w YARN team
     println("===> Setting up sec")
     // Setup security tokens
-    if (UserGroupInformation.isSecurityEnabled) { // Note: Credentials class is marked as LimitedPrivate for HDFS and MapReduce
-      println("===> Sec enabled")
-      val credentials = new Credentials
-      val tokenRenewer = conf.get(YarnConfiguration.RM_PRINCIPAL)
-      if (tokenRenewer == null || tokenRenewer.length == 0) throw new IOException("Can't get Master Kerberos principal for the RM to use as renewer")
-      // For now, only getting tokens for the default file-system.
-      val tokens = fs.addDelegationTokens(tokenRenewer, credentials)
-      if (tokens != null) for (token <- tokens) {
-        println("===> Got dt for " + fs.getUri + "; " + token)
-      }
-      val dob = new DataOutputBuffer
-      credentials.writeTokenStorageToStream(dob)
-      val fsTokens = ByteBuffer.wrap(dob.getData, 0, dob.getLength)
-      amContainer.setTokens(fsTokens)
-    }
+//    if (UserGroupInformation.isSecurityEnabled) { // Note: Credentials class is marked as LimitedPrivate for HDFS and MapReduce
+//      println("===> Sec enabled")
+//      val credentials = new Credentials
+//      val tokenRenewer = conf.get(YarnConfiguration.RM_PRINCIPAL)
+//      if (tokenRenewer == null || tokenRenewer.length == 0) throw new IOException("Can't get Master Kerberos principal for the RM to use as renewer")
+//      // For now, only getting tokens for the default file-system.
+//      val tokens = fs.addDelegationTokens(tokenRenewer, credentials)
+//      if (tokens != null) for (token <- tokens) {
+//        println("===> Got dt for " + fs.getUri + "; " + token)
+//      }
+//      val dob = new DataOutputBuffer
+//      credentials.writeTokenStorageToStream(dob)
+//      val fsTokens = ByteBuffer.wrap(dob.getData, 0, dob.getLength)
+//      amContainer.setTokens(fsTokens)
+//    }
 
     // Finally, set-up ApplicationSubmissionContext for the application
     val appContext = app.getApplicationSubmissionContext
