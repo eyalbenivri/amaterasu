@@ -45,10 +45,14 @@ import java.util.Map;
 public class Client {
 
     Configuration conf = new YarnConfiguration();
-    ClusterConfig config = ClusterConfig(new FileInputStream("${arguments.home}/amaterasu.properties"))
+
+
 
     public void run(JobOpts opts) throws Exception {
-//        final String comgmand = args[0];
+
+        ClusterConfig config =  new ClusterConfig();
+        config.load(new FileInputStream(opts.home + "/amaterasu.properties"));
+        //        final String comgmand = args[0];
 //        final int n = Integer.valueOf(args[1]);
 //        final Path jarPath = new Path(args[2]);
 
@@ -68,7 +72,7 @@ public class Client {
                 Collections.singletonList(
                         "$JAVA_HOME/bin/java" +
                                 " -Xmx256M" +
-                                " org.apache.amaterasu.leader.yarn.ApplicationMaster job_1" + //TODO: from args
+                                " org.apache.amaterasu.leader.yarn.ApplicationMasterAsync job_1" + //TODO: from args
 //                                " " + command +
 //                                " " + String.valueOf(n) +
                                 " 1>" + ApplicationConstants.LOG_DIR_EXPANSION_VAR + "/stdout" +
@@ -76,9 +80,21 @@ public class Client {
                 )
         );
 
+        String p = config.YARN().hdfsJarsPath();
+        Path jarPath = new Path(p);
+
+        // get version of build
+        String version = config.version();
+
+        // get local resources pointers that will be set on the master container env
+        String leaderJarPath = "/bin/leader-" + version + "-all.jar";
+        Path mergedPath = Path.mergePaths(jarPath, new Path(leaderJarPath));
+
         // Setup jar for ApplicationMaster
         LocalResource appMasterJar = Records.newRecord(LocalResource.class);
-        setupAppMasterJar(jarPath, appMasterJar);
+
+        setupAppMasterJar(mergedPath, appMasterJar);
+        System.out.println("===> " + appMasterJar);
         amContainer.setLocalResources(
                 Collections.singletonMap("simpleapp.jar", appMasterJar));
 

@@ -78,7 +78,7 @@ esac
 done
 
 echo "repo: ${REPO} "
-CMD="yarn jar ${BASEDIR}/bin/leader-0.2.0-incubating-all.jar org.apache.amaterasu.leader.yarn.YarnJobLauncher --home ${BASEDIR} " #
+CMD="yarn jar ${BASEDIR}/bin/leader-0.2.0-incubating-all.jar org.apache.amaterasu.leader.yarn.Client --home ${BASEDIR} " #
 
 if [ -n "$REPO" ]; then
     echo "repo is ${REPO}"

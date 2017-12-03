@@ -43,13 +43,13 @@ class ClusterConfig extends Logging {
 
   //this should be a filesystem path that is reachable by all executors (HDFS, S3, local)
 
-  object YARN {
+  class YARN {
     var queue:String = "default"
     var hdfsJarsPath: String = ""
 
     def load(props: Properties): Unit = {
-      if(props.containsKey("yarn.queue")) YARN.queue = props.getProperty("yarn.queue")
-      if(props.containsKey("yarn.jarspath")) YARN.hdfsJarsPath = props.getProperty("yarn.jarspath")
+      if(props.containsKey("yarn.queue")) queue = props.getProperty("yarn.queue")
+      if(props.containsKey("yarn.jarspath")) hdfsJarsPath = props.getProperty("yarn.jarspath")
 
       Master.load(props)
     }
@@ -75,6 +75,8 @@ class ClusterConfig extends Logging {
     }
 
   }
+
+  val YARN = new YARN()
 
   object Webserver {
     var Port: String = ""

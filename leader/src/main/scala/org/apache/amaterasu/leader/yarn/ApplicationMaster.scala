@@ -108,6 +108,8 @@ class ApplicationMaster extends AMRMClientAsync.CallbackHandler with Logging {
   }
 
   def execute(jobId: String): Unit = {
+    println("started exe")
+    Thread.sleep(10000)
     conf = new YarnConfiguration()
     conf.addResource(new Path("/etc/hadoop/conf/core-site.xml"))
     conf.addResource(new Path("/etc/hadoop/conf/hdfs-site.xml"))
@@ -157,6 +159,7 @@ class ApplicationMaster extends AMRMClientAsync.CallbackHandler with Logging {
        rmClient.registerApplicationMaster("", 0, "")
     //}
     println("Registered application")
+    Thread.sleep(10000)
 //    val maxMem = registrationResponse.getMaximumResourceCapability.getMemory
 //    println("Max mem capability of resources in this cluster " + maxMem)
 //    val maxVCores = registrationResponse.getMaximumResourceCapability.getVirtualCores
