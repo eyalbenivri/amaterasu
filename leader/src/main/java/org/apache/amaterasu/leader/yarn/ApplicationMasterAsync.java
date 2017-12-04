@@ -24,7 +24,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.LinkedBlockingQueue;
 
-public class ApplicationMasterAsync implements AMRMClientAsync.CallbackHandler{
+public class ApplicationMasterAsync implements AMRMClientAsync.CallbackHandler {
 
     private Configuration configuration;
     private NMClient nmClient;
@@ -135,7 +135,7 @@ public class ApplicationMasterAsync implements AMRMClientAsync.CallbackHandler{
         // Make container requests to ResourceManager
         ActionData actionData = jobManager.getNextActionData();
 //        for (int i = 0; i < numContainersToWaitFor; ++i) {
-        if(actionData != null){
+        if (actionData != null) {
             AMRMClient.ContainerRequest containerAsk = new AMRMClient.ContainerRequest(capability, null, null, priority);
             System.out.println("[AM] Making res-req " + actionData.id());
             rmClient.addContainerRequest(containerAsk);
@@ -165,12 +165,11 @@ public class ApplicationMasterAsync implements AMRMClientAsync.CallbackHandler{
                     config.Jobs().Tasks().attempts(),
                     new LinkedBlockingQueue<ActionData>()
             );
-        }
-        else {
+        } else {
             jobManager = JobLoader.loadJob(
                     opts.repo,
                     opts.branch,
-                    opts.jobId,
+                    opts.newJobId,
                     client,
                     config.Jobs().Tasks().attempts(),
                     new LinkedBlockingQueue<ActionData>()

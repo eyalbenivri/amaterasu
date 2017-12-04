@@ -62,6 +62,15 @@ public class Client {
         YarnClientApplication app = yarnClient.createApplication();
 
         // Set up the container launch context for the application master
+
+        ApplicationSubmissionContext appContext = app.getApplicationSubmissionContext();
+
+        String newId = "";
+        if(opts.jobId == null){
+
+            newId = "--new-job-id " + appContext.getApplicationId().toString();
+        }
+
         ContainerLaunchContext amContainer =
                 Records.newRecord(ContainerLaunchContext.class);
         amContainer.setCommands(
@@ -70,6 +79,7 @@ public class Client {
                                 " -Xmx256M" +
                                 " org.apache.amaterasu.leader.yarn.ApplicationMasterAsync " + //TODO: from args
                                 joinStrings(args) +
+                                newId +
                                 "1>" + ApplicationConstants.LOG_DIR_EXPANSION_VAR + "/stdout " +
                                 "2>" + ApplicationConstants.LOG_DIR_EXPANSION_VAR + "/stderr"
                 )
@@ -108,8 +118,8 @@ public class Client {
         capability.setVirtualCores(1);
 
         // Finally, set-up ApplicationSubmissionContext for the application
-        ApplicationSubmissionContext appContext =
-                app.getApplicationSubmissionContext();
+//        ApplicationSubmissionContext appContext =
+//                app.getApplicationSubmissionContext();
         appContext.setApplicationName("amaterasu-job"); // application name
         appContext.setAMContainerSpec(amContainer);
         appContext.setResource(capability);
