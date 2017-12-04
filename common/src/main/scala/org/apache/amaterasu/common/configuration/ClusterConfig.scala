@@ -46,21 +46,22 @@ class ClusterConfig extends Logging {
   class YARN {
     var queue:String = "default"
     var hdfsJarsPath: String = ""
+    var master: Master = new Master()
 
     def load(props: Properties): Unit = {
       if(props.containsKey("yarn.queue")) queue = props.getProperty("yarn.queue")
       if(props.containsKey("yarn.jarspath")) hdfsJarsPath = props.getProperty("yarn.jarspath")
 
-      Master.load(props)
+      this.master.load(props)
     }
 
-    object Master {
+    class Master {
       var cores:Int = 1
       var memoryMB:Int = 256
 
       def load(props: Properties): Unit = {
-        if(props.containsKey("yarn.master.cores")) Master.cores = props.getProperty("yarn.master.cores").asInstanceOf[Int]
-        if(props.containsKey("yarn.master.memoryMB")) Master.memoryMB = props.getProperty("yarn.master.memoryMB").asInstanceOf[Int]
+        if(props.containsKey("yarn.master.cores")) this.cores = props.getProperty("yarn.master.cores").asInstanceOf[Int]
+        if(props.containsKey("yarn.master.memoryMB")) this.memoryMB = props.getProperty("yarn.master.memoryMB").asInstanceOf[Int]
       }
     }
 
