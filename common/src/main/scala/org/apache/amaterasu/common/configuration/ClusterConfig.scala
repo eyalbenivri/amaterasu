@@ -91,7 +91,7 @@ class ClusterConfig extends Logging {
     }
   }
 
-  object Jobs {
+  class Jobs {
 
     var cpus: Double = 1
     var mem: Long = 512
@@ -106,7 +106,7 @@ class ClusterConfig extends Logging {
       Tasks.load(props)
     }
 
-    object Tasks {
+    class Tasks {
 
       var attempts: Int = 3
       var cpus: Int = 1
@@ -121,7 +121,11 @@ class ClusterConfig extends Logging {
       }
     }
 
+    val Tasks = new Tasks()
+
   }
+
+  val Jobs = new Jobs()
 
   object AWS {
 

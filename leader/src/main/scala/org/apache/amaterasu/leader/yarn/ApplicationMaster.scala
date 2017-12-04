@@ -109,7 +109,7 @@ class ApplicationMaster extends AMRMClientAsync.CallbackHandler with Logging {
 
   def execute(jobId: String): Unit = {
     println("started exe")
-    Thread.sleep(10000)
+
     conf = new YarnConfiguration()
     conf.addResource(new Path("/etc/hadoop/conf/core-site.xml"))
     conf.addResource(new Path("/etc/hadoop/conf/hdfs-site.xml"))
