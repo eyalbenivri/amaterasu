@@ -39,10 +39,7 @@ import org.slf4j.LoggerFactory;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 public class Client {
 
@@ -103,8 +100,7 @@ public class Client {
 
         String newId = "";
         if (opts.jobId == null) {
-
-            newId = "--new-job-id " + appContext.getApplicationId().toString();
+            newId = "--new-job-id " + appContext.getApplicationId().toString() + "-" + UUID.randomUUID().toString();
         }
 
         List<String> commands = Collections.singletonList(
@@ -148,10 +144,12 @@ public class Client {
         LOGGER.info(mergedPath.getName());
         LocalResource leaderJar = null;
         LocalResource propFile = null;
+        LocalResource log4jPropFile = null;
 
         try {
             leaderJar = setLocalResourceFromPath(mergedPath);
             propFile = setLocalResourceFromPath(Path.mergePaths(jarPath, new Path("/amaterasu.properties")));
+            log4jPropFile = setLocalResourceFromPath(Path.mergePaths(jarPath, new Path("/log4j.properties")));
         } catch (IOException e) {
             LOGGER.error("Error initializing yarn local resources.", e);
             System.exit(4);
@@ -161,6 +159,7 @@ public class Client {
         Map<String, LocalResource> localResources = new HashMap<>();
         localResources.put("leader.jar", leaderJar);
         localResources.put("amaterasu.properties", propFile);
+        localResources.put("log4j.properties", log4jPropFile);
         amContainer.setLocalResources(localResources);
 
         // Setup CLASSPATH for ApplicationMaster

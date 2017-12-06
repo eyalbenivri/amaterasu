@@ -128,7 +128,6 @@ class ApplicationMaster extends AMRMClientAsync.CallbackHandler with Logging {
 
     jarPath = new Path(config.YARN.hdfsJarsPath)
     jarPathQualified = fs.makeQualified(jarPath)
-    jarPathQualified = fs.makeQualified(jarPath)
 
     this.version = config.version
 
