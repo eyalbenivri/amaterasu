@@ -122,6 +122,7 @@ public class ApplicationMasterAsync implements AMRMClientAsync.CallbackHandler {
         rmClient.registerApplicationMaster("", 0, "");
         System.out.println("[AM] registerApplicationMaster 1");
 
+        Thread.sleep(10000);
         // Priority for worker containers - priorities are intra-application
         Priority priority = Records.newRecord(Priority.class);
         priority.setPriority(0);
@@ -153,7 +154,7 @@ public class ApplicationMasterAsync implements AMRMClientAsync.CallbackHandler {
         System.out.println("[AM] unregisterApplicationMaster 1");
     }
 
-    private void initJob(JobOpts opts) {
+    private void initJob(JobOpts opts) throws InterruptedException {
         RetryPolicy retryPolicy = new ExponentialBackoffRetry(1000, 3);
         client = CuratorFrameworkFactory.newClient(config.zk(), retryPolicy);
         client.start();
@@ -175,7 +176,14 @@ public class ApplicationMasterAsync implements AMRMClientAsync.CallbackHandler {
                     new LinkedBlockingQueue<ActionData>()
             );
 
+
+
         }
+        System.out.println("created jobManager");
+        Thread.sleep(10000);
         jobManager.start();
+
+        System.out.println("started jobManager");
+        Thread.sleep(10000);
     }
 }

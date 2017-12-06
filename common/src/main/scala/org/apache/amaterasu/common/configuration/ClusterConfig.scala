@@ -65,6 +65,8 @@ class ClusterConfig extends Logging {
       }
     }
 
+    val Master = new Master()
+
     object Worker {
       var cores:Int = 1
       var memoryMB:Int = 256

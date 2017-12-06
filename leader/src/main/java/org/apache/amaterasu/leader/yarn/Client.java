@@ -17,18 +17,12 @@
 package org.apache.amaterasu.leader.yarn;
 
 import org.apache.amaterasu.common.configuration.ClusterConfig;
-import org.apache.amaterasu.leader.utilities.Args;
-import org.apache.amaterasu.leader.utilities.BaseJobLauncher;
-import org.apache.commons.cli.BasicParser;
-import org.apache.commons.cli.CommandLine;
-import org.apache.commons.cli.CommandLineParser;
-import org.apache.commons.cli.Options;
+
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.LocalFileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.hdfs.DistributedFileSystem;
+
 import org.apache.hadoop.yarn.api.ApplicationConstants;
 import org.apache.hadoop.yarn.api.records.*;
 import org.apache.hadoop.yarn.client.api.YarnClient;
@@ -38,17 +32,20 @@ import org.apache.hadoop.yarn.exceptions.YarnException;
 import org.apache.hadoop.yarn.util.Apps;
 import org.apache.hadoop.yarn.util.ConverterUtils;
 import org.apache.hadoop.yarn.util.Records;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.IOException;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-public class Client extends BaseJobLauncher {
+public class Client {
+
     private final static Logger LOGGER = LoggerFactory.getLogger(Client.class);
     private final Configuration conf = new YarnConfiguration();
     private FileSystem fs;
@@ -64,12 +61,16 @@ public class Client extends BaseJobLauncher {
         return fileResource;
     }
 
-    public void run(Args arguments, ClusterConfig config, boolean resume) {
-        conf.addResource(new Path("/etc/hadoop/conf/core-site.xml"));
-        conf.addResource(new Path("/etc/hadoop/conf/hdfs-site.xml"));
-        conf.addResource(new Path("/etc/hadoop/conf/yarn-site.xml"));
-        conf.set("fs.hdfs.impl", DistributedFileSystem.class.getName());
-        conf.set("fs.file.impl", LocalFileSystem.class.getName());
+    public void run(JobOpts opts, String[] args) throws Exception {
+
+        ClusterConfig config = new ClusterConfig();
+        config.load(new FileInputStream(opts.home + "/amaterasu.properties"));
+
+//        conf.addResource(new Path("/etc/hadoop/conf/core-site.xml"));
+//        conf.addResource(new Path("/etc/hadoop/conf/hdfs-site.xml"));
+//        conf.addResource(new Path("/etc/hadoop/conf/yarn-site.xml"));
+//        conf.set("fs.hdfs.impl", DistributedFileSystem.class.getName());
+//        conf.set("fs.file.impl", LocalFileSystem.class.getName());
 
         // Create yarnClient
         YarnClient yarnClient = YarnClient.createYarnClient();
@@ -96,46 +97,61 @@ public class Client extends BaseJobLauncher {
             System.exit(3);
         }
         Path jarPath = new Path(config.YARN().hdfsJarsPath());
-        Path jarPathQualified = fs.makeQualified(jarPath);
+        //Path jarPathQualified = fs.makeQualified(jarPath);
 
-        List<String> commands = Collections.singletonList(String.format("$JAVA_HOME/bin/java " +
-                        "org.apache.amaterasu.leader.yarn.ApplicationMaster %s 1>%s/AppMaster.stdout " +
-                        "2>%s/AppMaster.stderr", arguments.jobId(),
-                ApplicationConstants.LOG_DIR_EXPANSION_VAR,
-                ApplicationConstants.LOG_DIR_EXPANSION_VAR
-        ));
+        ApplicationSubmissionContext appContext = app.getApplicationSubmissionContext();
+
+        String newId = "";
+        if (opts.jobId == null) {
+
+            newId = "--new-job-id " + appContext.getApplicationId().toString();
+        }
+
+        List<String> commands = Collections.singletonList(
+                "$JAVA_HOME/bin/java" +
+                        " -Xmx256M" +
+                        " org.apache.amaterasu.leader.yarn.ApplicationMasterAsync " +
+                        joinStrings(args) +
+                        newId +
+                        "1>" + ApplicationConstants.LOG_DIR_EXPANSION_VAR + "/stdout " +
+                        "2>" + ApplicationConstants.LOG_DIR_EXPANSION_VAR + "/stderr"
+        );
 
         // Set up the container launch context for the application master
         ContainerLaunchContext amContainer = Records.newRecord(ContainerLaunchContext.class);
         amContainer.setCommands(commands);
 
         // Setup local ama folder on hdfs.
-        try {
-            if (!fs.exists(jarPathQualified)) {
-                File home = new File(arguments.home());
-                for (File f : home.listFiles()) {
-                    fs.mkdirs(jarPathQualified);
-                    fs.copyFromLocalFile(false, true, new Path(f.getAbsolutePath()), jarPathQualified);
-                }
-            }
-        } catch (IOException e) {
-            LOGGER.error("Error uploading ama folder to HDFS.", e);
-            System.exit(3);
-        }
+//        try {
+//            if (!fs.exists(jarPathQualified)) {
+//                File home = new File(opts.home);
+//                for (File f : home.listFiles()) {
+//                    fs.mkdirs(jarPathQualified);
+//                    fs.copyFromLocalFile(false, true, new Path(f.getAbsolutePath()), jarPathQualified);
+//                }
+//            }
+//        } catch (IOException e) {
+//            LOGGER.error("Error uploading ama folder to HDFS.", e);
+//            System.exit(3);
+//        }
 
         // get version of build
         String version = config.version();
 
         // get local resources pointers that will be set on the master container env
         String leaderJarPath = String.format("/bin/leader-%s-all.jar", version);
-        LOGGER.info("Leader Jar path is '{}'", leaderJarPath);
-        Path mergedPath = Path.mergePaths(jarPathQualified, new Path(leaderJarPath));
+        LOGGER.info("Leader Jar path is: ", leaderJarPath);
+        Path mergedPath = Path.mergePaths(jarPath, new Path(leaderJarPath));
+
+        // System.out.println("===> path: " + jarPathQualified);
+
         LOGGER.info(mergedPath.getName());
         LocalResource leaderJar = null;
         LocalResource propFile = null;
+
         try {
             leaderJar = setLocalResourceFromPath(mergedPath);
-            propFile = setLocalResourceFromPath(Path.mergePaths(jarPathQualified, new Path("/amaterasu.properties")));
+            propFile = setLocalResourceFromPath(Path.mergePaths(jarPath, new Path("/amaterasu.properties")));
         } catch (IOException e) {
             LOGGER.error("Error initializing yarn local resources.", e);
             System.exit(4);
@@ -149,13 +165,7 @@ public class Client extends BaseJobLauncher {
 
         // Setup CLASSPATH for ApplicationMaster
         Map<String, String> appMasterEnv = new HashMap<>();
-        for (String c :
-                conf.getStrings(YarnConfiguration.YARN_APPLICATION_CLASSPATH, YarnConfiguration.DEFAULT_YARN_APPLICATION_CLASSPATH)) {
-            appMasterEnv.put(ApplicationConstants.Environment.CLASSPATH.name(), c.trim());
-        }
-
-        // Setup environment variables for ApplicationMaster
-        appMasterEnv.put(ApplicationConstants.Environment.CLASSPATH.name(), ApplicationConstants.Environment.PWD.$() + File.separator + "*");
+        setupAppMasterEnv(appMasterEnv);
         appMasterEnv.put("AMA_CONF_PATH", String.format("%s/amaterasu.properties", config.YARN().hdfsJarsPath()));
         amContainer.setEnvironment(appMasterEnv);
 
@@ -165,20 +175,19 @@ public class Client extends BaseJobLauncher {
         capability.setVirtualCores(config.YARN().master().cores());
 
         // Setup jar for ApplicationMaster
-        LocalResource appMasterJar = Records.newRecord(LocalResource.class);
+//        LocalResource appMasterJar = Records.newRecord(LocalResource.class);
 
-        try {
-            setupAppMasterJar(mergedPath, appMasterJar);
-        } catch (IOException e) {
-            LOGGER.error("Error initializing yarn jar on am.", e);
-            System.exit(5);
-        }
-        LOGGER.info("===> {}", appMasterJar);
-        amContainer.setLocalResources(Collections.singletonMap("amaterasu-yarn.jar", appMasterJar));
+//        try {
+//            setupAppMasterJar(mergedPath, appMasterJar);
+//        } catch (IOException e) {
+//            LOGGER.error("Error initializing yarn jar on am.", e);
+//            System.exit(5);
+//        }
+//        LOGGER.info("===> {}", appMasterJar);
+//        amContainer.setLocalResources(Collections.singletonMap("amaterasu-yarn.jar", appMasterJar));
 
         // Finally, set-up ApplicationSubmissionContext for the application
-        ApplicationSubmissionContext appContext = app.getApplicationSubmissionContext();
-        appContext.setApplicationName("amaterasu - " + arguments.name());
+        appContext.setApplicationName("amaterasu-" + opts.name);
         appContext.setAMContainerSpec(amContainer);
         appContext.setResource(capability);
         appContext.setQueue(config.YARN().queue());
@@ -198,19 +207,9 @@ public class Client extends BaseJobLauncher {
         }
 
         ApplicationReport appReport = null;
-        try {
-            appReport = yarnClient.getApplicationReport(appId);
-        } catch (YarnException e) {
-            LOGGER.error("Error getting application report.", e);
-            System.exit(8);
-        } catch (IOException e) {
-            LOGGER.error("Error getting application report.", e);
-            System.exit(9);
-        }
-        YarnApplicationState appState = appReport.getYarnApplicationState();
-        while (appState != YarnApplicationState.FINISHED &&
-                appState != YarnApplicationState.KILLED &&
-                appState != YarnApplicationState.FAILED) {
+        YarnApplicationState appState;
+
+        do {
             try {
                 Thread.sleep(1000);
             } catch (InterruptedException e) {
@@ -227,17 +226,41 @@ public class Client extends BaseJobLauncher {
                 System.exit(9);
             }
             appState = appReport.getYarnApplicationState();
-        }
+        } while (appState != YarnApplicationState.FINISHED &&
+                appState != YarnApplicationState.KILLED &&
+                appState != YarnApplicationState.FAILED);
 
         LOGGER.info("Application {} finished with state {} at {}", appId, appState, appReport.getFinishTime());
     }
 
-    private void setupAppMasterJar(Path jarPath, LocalResource appMasterJar) throws IOException {
-        FileStatus jarStat = FileSystem.get(conf).getFileStatus(jarPath);
-        appMasterJar.setResource(ConverterUtils.getYarnUrlFromPath(jarPath));
-        appMasterJar.setSize(jarStat.getLen());
-        appMasterJar.setTimestamp(jarStat.getModificationTime());
-        appMasterJar.setType(LocalResourceType.FILE);
-        appMasterJar.setVisibility(LocalResourceVisibility.PUBLIC);
+    public static void main(String[] args) throws Exception {
+        Client c = new Client();
+
+        JobOpts opts = ArgsParser.getJobOpts(args);
+
+        c.run(opts, args);
+    }
+
+    private static String joinStrings(String[] str) {
+
+        StringBuilder builder = new StringBuilder();
+        for (String s : str) {
+            builder.append(s);
+            builder.append(" ");
+        }
+        return builder.toString();
+
+    }
+
+    private void setupAppMasterEnv(Map<String, String> appMasterEnv) {
+        for (String c : conf.getStrings(
+                YarnConfiguration.YARN_APPLICATION_CLASSPATH,
+                YarnConfiguration.DEFAULT_YARN_APPLICATION_CLASSPATH)) {
+            Apps.addToEnvironment(appMasterEnv, ApplicationConstants.Environment.CLASSPATH.name(),
+                    c.trim());
+        }
+        Apps.addToEnvironment(appMasterEnv,
+                ApplicationConstants.Environment.CLASSPATH.name(),
+                ApplicationConstants.Environment.PWD.$() + File.separator + "*");
     }
 }
