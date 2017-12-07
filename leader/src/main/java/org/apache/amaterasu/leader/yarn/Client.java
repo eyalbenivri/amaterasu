@@ -51,6 +51,7 @@ public class Client {
     private FileSystem fs;
 
     private LocalResource setLocalResourceFromPath(Path path) throws IOException {
+
         FileStatus stat = fs.getFileStatus(path);
         LocalResource fileResource = Records.newRecord(LocalResource.class);
         fileResource.setResource(ConverterUtils.getYarnUrlFromPath(path));
@@ -110,7 +111,7 @@ public class Client {
         List<String> commands = Collections.singletonList(
                 "$JAVA_HOME/bin/java" +
                         " -Xmx256M" +
-                        " org.apache.amaterasu.leader.yarn.ApplicationMasterAsync " +
+                        " org.apache.amaterasu.leader.yarn.ApplicationMaster " +
                         joinStrings(args) +
                         newId +
                         "1>" + ApplicationConstants.LOG_DIR_EXPANSION_VAR + "/stdout " +

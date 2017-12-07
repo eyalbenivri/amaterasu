@@ -8,7 +8,8 @@ case class Args(
                  name: String = "amaterasu-job",
                  jobId: String = null,
                  report: String = "code",
-                 home: String = ""
+                 home: String = "",
+                 newJobId: String = ""
                ) {
   def toCmdString: String = {
     var cmd = s""" --repo $repo --branch $branch --env $env --name $name --report $report --home $home"""
@@ -43,9 +44,13 @@ object Args {
         c.copy(name = x)
       } text "The name of the job"
 
-      opt[String]('i', "job-id") action { (x, c) =>
+       opt[String]('i', "job-id") action { (x, c) =>
         c.copy(jobId = x)
       } text "The jobId - should be passed only when resuming a job"
+
+      opt[String]('j', "new-job-id") action { (x, c) =>
+        c.copy(jobId = x)
+      } text "A new jobId - should never be passed by a user"
 
       opt[String]('r', "report") action { (x, c) =>
         c.copy(report = x)

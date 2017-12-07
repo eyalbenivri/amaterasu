@@ -29,8 +29,10 @@ import org.apache.amaterasu.common.dataobjects.ActionData
 import org.apache.amaterasu.common.execution.actions.NotificationLevel.NotificationLevel
 import org.apache.amaterasu.common.logging.Logging
 import org.apache.amaterasu.leader.execution.{JobLoader, JobManager}
-import org.apache.amaterasu.leader.utilities.DataLoader
-import org.apache.curator.framework.CuratorFramework
+import org.apache.amaterasu.leader.utilities.{Args, DataLoader}
+import org.apache.curator.RetryPolicy
+import org.apache.curator.framework.{CuratorFramework, CuratorFrameworkFactory}
+import org.apache.curator.retry.ExponentialBackoffRetry
 import org.apache.hadoop.fs.{FileSystem, LocalFileSystem, Path}
 import org.apache.hadoop.hdfs.DistributedFileSystem
 import org.apache.hadoop.net.NetUtils
@@ -70,7 +72,7 @@ class ApplicationMaster extends AMRMClientAsync.CallbackHandler with Logging {
   private var propPath: String = ""
   private var props: InputStream = _
   private var jarPath: Path = _
-  private var jarPathQualified: Path = _
+  //private var sjarPathQualified: Path = _
   private var version: String = ""
   private var executorPath: Path = _
   private var executorJar: LocalResource = _
@@ -107,14 +109,8 @@ class ApplicationMaster extends AMRMClientAsync.CallbackHandler with Logging {
     fileResource
   }
 
-  def execute(jobId: String): Unit = {
+  def execute(arguments: Args): Unit = {
     println("started exe")
-
-    conf = new YarnConfiguration()
-    conf.addResource(new Path("/etc/hadoop/conf/core-site.xml"))
-    conf.addResource(new Path("/etc/hadoop/conf/hdfs-site.xml"))
-    conf.set("fs.hdfs.impl", classOf[DistributedFileSystem].getName)
-    conf.set("fs.file.impl", classOf[LocalFileSystem].getName)
 
     propPath = System.getenv("PWD") + "/amaterasu.properties"
     props = new FileInputStream(new File(propPath))
@@ -122,17 +118,17 @@ class ApplicationMaster extends AMRMClientAsync.CallbackHandler with Logging {
 
     // no need for hdfs double check (nod to Aaron Rodgers)
     // jars on HDFS should have been verified by the YARN client
+    conf = new YarnConfiguration()
     fs = FileSystem.get(conf)
 
     config = ClusterConfig(props)
 
     jarPath = new Path(config.YARN.hdfsJarsPath)
-    jarPathQualified = fs.makeQualified(jarPath)
-    jarPathQualified = fs.makeQualified(jarPath)
+    //jarPathQualified = fs.makeQualified(jarPath)
 
     this.version = config.version
 
-    executorPath = Path.mergePaths(jarPathQualified, new Path(s"/dist/executor-${this.version}-all.jar"))
+    executorPath = Path.mergePaths(jarPath, new Path(s"/dist/executor-${this.version}-all.jar"))
     executorJar = setLocalResourceFromPath(executorPath)
 
     println("Started execute")
@@ -154,7 +150,7 @@ class ApplicationMaster extends AMRMClientAsync.CallbackHandler with Logging {
     val appMasterHostname = NetUtils.getHostname
     println("Registering application")
 
-    var registrationResponse: RegisterApplicationMasterResponse = null
+    //var registrationResponse: RegisterApplicationMasterResponse = null
     //synchronized {
        rmClient.registerApplicationMaster("", 0, "")
     //}
@@ -164,9 +160,10 @@ class ApplicationMaster extends AMRMClientAsync.CallbackHandler with Logging {
 //    println("Max mem capability of resources in this cluster " + maxMem)
 //    val maxVCores = registrationResponse.getMaximumResourceCapability.getVirtualCores
 //    println("Max vcores capability of resources in this cluster " + maxVCores)
-    register(jobId)
-    println(s"Created jobManager. jobManager.registeredActions.size: ${jobManager.registeredActions.size}")
+ //   register(jobId)
+   // println(s"Created jobManager. jobManager.registeredActions.size: ${jobManager.registeredActions.size}")
 
+    initJob(arguments)
     // Resource requirements for worker containers
     val capability = Records.newRecord(classOf[Resource])
     capability.setMemory(Math.min(config.taskMem, 256))
@@ -188,31 +185,6 @@ class ApplicationMaster extends AMRMClientAsync.CallbackHandler with Logging {
     println("Finished asking for containers")
   }
 
-
-  def register(jobId: String) = {
-    if (!resume) {
-
-      jobManager = JobLoader.loadJob(
-        src,
-        branch,
-        jobId,
-        client,
-        config.Jobs.Tasks.attempts,
-        new LinkedBlockingQueue[ActionData]()
-      )
-    }
-    else {
-
-      JobLoader.reloadJob(
-        jobId,
-        client,
-        config.Jobs.Tasks.attempts,
-        new LinkedBlockingQueue[ActionData]()
-      )
-
-    }
-    jobManager.start()
-  }
 
   override def onContainersCompleted(statuses: util.List[ContainerStatus]) = ???
 
@@ -291,11 +263,50 @@ class ApplicationMaster extends AMRMClientAsync.CallbackHandler with Logging {
   }
 
   override def onError(e: Throwable) = ???
+
+  def initJob(args: Args) = {
+    val retryPolicy = new ExponentialBackoffRetry(1000, 3)
+    client = CuratorFrameworkFactory.newClient(config.zk, retryPolicy)
+    client.start()
+
+    if (args.jobId != null && !args.jobId.isEmpty) {
+      jobManager = JobLoader.reloadJob(
+        args.jobId,
+        client,
+        config.Jobs.Tasks.attempts,
+        new LinkedBlockingQueue[ActionData])
+
+    } else {
+      jobManager = JobLoader.loadJob(
+        args.repo,
+        args.branch,
+        args.newJobId,
+        client,
+        config.Jobs.Tasks.attempts,
+        new LinkedBlockingQueue[ActionData])
+    }
+
+    log.info("created jobManager")
+    Thread.sleep(10000)
+    jobManager.start()
+
+    log.info("started jobManager")
+    Thread.sleep(10000)
+  }
 }
 
 object ApplicationMaster extends App {
 
-  val appMaster = new ApplicationMaster()
-  appMaster.execute(args(0))
+  val parser = Args.getParser
+  parser.parse(args, Args()) match {
+
+    case Some(arguments: Args) =>
+      val appMaster = new ApplicationMaster()
+
+
+      appMaster.execute(arguments)
+
+    case None =>
+  }
 
 }
