@@ -155,7 +155,6 @@ class ApplicationMaster extends AMRMClientAsync.CallbackHandler with Logging {
        rmClient.registerApplicationMaster("", 0, "")
     //}
     println("Registered application")
-    Thread.sleep(10000)
 //    val maxMem = registrationResponse.getMaximumResourceCapability.getMemory
 //    println("Max mem capability of resources in this cluster " + maxMem)
 //    val maxVCores = registrationResponse.getMaximumResourceCapability.getVirtualCores
@@ -287,11 +286,9 @@ class ApplicationMaster extends AMRMClientAsync.CallbackHandler with Logging {
     }
 
     log.info("created jobManager")
-    Thread.sleep(10000)
     jobManager.start()
 
     log.info("started jobManager")
-    Thread.sleep(10000)
   }
 }
 

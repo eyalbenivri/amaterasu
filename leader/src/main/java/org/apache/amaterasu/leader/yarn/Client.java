@@ -114,6 +114,7 @@ public class Client {
                         "2>" + ApplicationConstants.LOG_DIR_EXPANSION_VAR + "/stderr"
         );
 
+
         // Set up the container launch context for the application master
         ContainerLaunchContext amContainer = Records.newRecord(ContainerLaunchContext.class);
         amContainer.setCommands(commands);

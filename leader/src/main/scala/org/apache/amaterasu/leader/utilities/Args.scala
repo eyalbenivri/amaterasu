@@ -49,7 +49,7 @@ object Args {
       } text "The jobId - should be passed only when resuming a job"
 
       opt[String]('j', "new-job-id") action { (x, c) =>
-        c.copy(jobId = x)
+        c.copy(newJobId = x)
       } text "A new jobId - should never be passed by a user"
 
       opt[String]('r', "report") action { (x, c) =>
