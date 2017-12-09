@@ -58,6 +58,9 @@ object YarnJobLauncher extends BaseJobLauncher with Logging {
   override def run(arguments: Args, config: ClusterConfig, resume: Boolean): Unit = {
     // Create YARN Client
     val conf = new YarnConfiguration()
+    conf.addResource(new Path("file:///etc/hadoop/conf/core-site.xml"))
+    conf.addResource(new Path("file:///etc/hadoop/conf/hdfs-site.xml"))
+    conf.set("mapreduce.job.user.classpath.first", "true")
     val client: YarnClient = YarnClient.createYarnClient()
     client.init(conf)
     client.start()
@@ -73,8 +76,11 @@ object YarnJobLauncher extends BaseJobLauncher with Logging {
     val jarPath = new Path(config.YARN.hdfsJarsPath)
     val jarPathQualified = fs.makeQualified(jarPath)
 
-    val commands = Collections.singletonList("$JAVA_HOME/bin/java " +
-      s"org.apache.amaterasu.leader.yarn.ApplicationMaster ${arguments.jobId} 1>" + ApplicationConstants.LOG_DIR_EXPANSION_VAR + "/AppMaster.stdout 2>" + ApplicationConstants.LOG_DIR_EXPANSION_VAR + "/AppMaster.stderr"
+    val commands = Collections.singletonList(
+      s"""$$JAVA_HOME/bin/java org.apache.amaterasu.leader.yarn.ApplicationMaster
+         | ${arguments.jobId}
+         | 1>${ApplicationConstants.LOG_DIR_EXPANSION_VAR}/AppMaster.stdout
+         | 2>${ApplicationConstants.LOG_DIR_EXPANSION_VAR}/AppMaster.stderr""".stripMargin
     )
     amContainer.setCommands(commands)
 
@@ -92,9 +98,9 @@ object YarnJobLauncher extends BaseJobLauncher with Logging {
 
     // get local resources pointers that will be set on the master container env
     val leaderJarPath = s"/bin/leader-$version-all.jar"
-    println(s"Leader Jar path is '$leaderJarPath'")
+    log.info(s"Leader Jar path is '$leaderJarPath'")
     val mergedPath = Path.mergePaths(jarPathQualified, new Path(leaderJarPath))
-    println(mergedPath.getName)
+    log.info(mergedPath.getName)
     val leaderJar: LocalResource = setLocalResourceFromPath(mergedPath)
     val propFile: LocalResource = setLocalResourceFromPath(Path.mergePaths(jarPathQualified, new Path(s"/amaterasu.properties")))
 
@@ -111,9 +117,11 @@ object YarnJobLauncher extends BaseJobLauncher with Logging {
       appMasterEnv.put(Environment.CLASSPATH.name, c.trim)
     }
 
+
     appMasterEnv.put(Environment.CLASSPATH.name, Environment.PWD.$ + File.separator + "*")
 
     appMasterEnv.put("AMA_CONF_PATH", s"${config.YARN.hdfsJarsPath}/amaterasu.properties")
+    appMasterEnv.put("HADOOP_USER_CLASSPATH_FIRST", "true")
     amContainer.setEnvironment(appMasterEnv)
 
     // Set up resource type requirements for ApplicationMaster

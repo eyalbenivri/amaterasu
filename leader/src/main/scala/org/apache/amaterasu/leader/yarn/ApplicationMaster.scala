@@ -19,8 +19,8 @@ package org.apache.amaterasu.leader.yarn
 import java.io.{File, FileInputStream, InputStream}
 import java.util
 import java.util.Collections
-import java.util.concurrent.locks.ReentrantLock
 import java.util.concurrent.{ConcurrentHashMap, LinkedBlockingQueue}
+import java.util.concurrent.locks.ReentrantLock
 
 import com.google.gson.Gson
 import org.apache.amaterasu.common.configuration.ClusterConfig
@@ -30,34 +30,29 @@ import org.apache.amaterasu.common.execution.actions.NotificationLevel.Notificat
 import org.apache.amaterasu.common.logging.Logging
 import org.apache.amaterasu.leader.execution.{JobLoader, JobManager}
 import org.apache.amaterasu.leader.utilities.{Args, DataLoader}
-import org.apache.curator.RetryPolicy
 import org.apache.curator.framework.{CuratorFramework, CuratorFrameworkFactory}
 import org.apache.curator.retry.ExponentialBackoffRetry
-import org.apache.hadoop.fs.{FileSystem, LocalFileSystem, Path}
-import org.apache.hadoop.hdfs.DistributedFileSystem
+import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.hadoop.net.NetUtils
 import org.apache.hadoop.yarn.api.records._
 import org.apache.hadoop.yarn.client.api.AMRMClient.ContainerRequest
 import org.apache.hadoop.yarn.client.api.async.impl.NMClientAsyncImpl
 import org.apache.hadoop.yarn.client.api.async.{AMRMClientAsync, NMClientAsync}
 import org.apache.hadoop.yarn.conf.YarnConfiguration
+import org.apache.hadoop.yarn.exceptions.YarnRuntimeException
 import org.apache.hadoop.yarn.util.{ConverterUtils, Records}
 
+import scala.collection.JavaConversions._
 import scala.collection.JavaConverters._
-import scala.collection.concurrent
-import org.apache.hadoop.fs.FileSystem
-import org.apache.hadoop.yarn.api.ApplicationConstants
-import org.apache.hadoop.yarn.api.protocolrecords.RegisterApplicationMasterResponse
-
-import scala.collection.concurrent
-import scala.concurrent.Future
+import scala.collection.{concurrent, mutable}
+import scala.concurrent.ExecutionContext.Implicits.global
+import scala.concurrent.{Future, _}
 import scala.util.{Failure, Success}
-import scala.concurrent._
-import ExecutionContext.Implicits.global
 
 class ApplicationMaster extends AMRMClientAsync.CallbackHandler with Logging {
 
-  println("ApplicationMaster start")
+  private val MAX_ATTEMPTS_PER_TASK = 3
+  log.info("ApplicationMaster start")
   private var jobManager: JobManager = _
   private var client: CuratorFramework = _
   private var config: ClusterConfig = _
@@ -78,10 +73,10 @@ class ApplicationMaster extends AMRMClientAsync.CallbackHandler with Logging {
   private var executorJar: LocalResource = _
   // private val command = "echo I'm running"
   // val gson:Gson = new Gson()
-  private val containersIdsToTaskIds: concurrent.Map[Long, String] = new ConcurrentHashMap[Long, String].asScala
+  private val containersIdsToTask: concurrent.Map[Long, ActionData] = new ConcurrentHashMap[Long, ActionData].asScala
   private val completedContainersAndTaskIds: concurrent.Map[Long, String] = new ConcurrentHashMap[Long, String].asScala
   private val failedTasksCounter: concurrent.Map[String, Int] = new ConcurrentHashMap[String, Int].asScala
-
+  private val tasksToRetry: mutable.Queue[ActionData] = new mutable.Queue[ActionData]()
   // this map holds the following structure:
   // slaveId
   //  |
@@ -110,7 +105,7 @@ class ApplicationMaster extends AMRMClientAsync.CallbackHandler with Logging {
   }
 
   def execute(arguments: Args): Unit = {
-    println("started exe")
+    log.info(s"started AM with args ${arguments}")
 
     propPath = System.getenv("PWD") + "/amaterasu.properties"
     props = new FileInputStream(new File(propPath))
@@ -131,7 +126,7 @@ class ApplicationMaster extends AMRMClientAsync.CallbackHandler with Logging {
     executorPath = Path.mergePaths(jarPath, new Path(s"/dist/executor-${this.version}-all.jar"))
     executorJar = setLocalResourceFromPath(executorPath)
 
-    println("Started execute")
+    log.info("Started execute")
 
     nmClient = new NMClientAsyncImpl(new YarnNMCallbackHandler())
 
@@ -145,24 +140,19 @@ class ApplicationMaster extends AMRMClientAsync.CallbackHandler with Logging {
     rmClient.init(conf)
     rmClient.start()
 
+    initJob(arguments)
 
     // Register with ResourceManager
     val appMasterHostname = NetUtils.getHostname
-    println("Registering application")
+    log.info("Registering application")
+    val registrationResponse = rmClient.registerApplicationMaster("", 0, "")
+    log.info("Registered application")
+    val maxMem = registrationResponse.getMaximumResourceCapability.getMemory
+    log.info("Max mem capability of resources in this cluster " + maxMem)
+    val maxVCores = registrationResponse.getMaximumResourceCapability.getVirtualCores
+    log.info("Max vcores capability of resources in this cluster " + maxVCores)
+    log.info(s"Created jobManager. jobManager.registeredActions.size: ${jobManager.registeredActions.size}")
 
-    //var registrationResponse: RegisterApplicationMasterResponse = null
-    //synchronized {
-       rmClient.registerApplicationMaster("", 0, "")
-    //}
-    println("Registered application")
-//    val maxMem = registrationResponse.getMaximumResourceCapability.getMemory
-//    println("Max mem capability of resources in this cluster " + maxMem)
-//    val maxVCores = registrationResponse.getMaximumResourceCapability.getVirtualCores
-//    println("Max vcores capability of resources in this cluster " + maxVCores)
- //   register(jobId)
-   // println(s"Created jobManager. jobManager.registeredActions.size: ${jobManager.registeredActions.size}")
-
-    initJob(arguments)
     // Resource requirements for worker containers
     val capability = Records.newRecord(classOf[Resource])
     capability.setMemory(Math.min(config.taskMem, 256))
@@ -177,91 +167,98 @@ class ApplicationMaster extends AMRMClientAsync.CallbackHandler with Logging {
       val priority: Priority = Records.newRecord(classOf[Priority])
       priority.setPriority(askedContainers)
       val containerAsk = new ContainerRequest(capability, null, null, priority)
-      println(s"Asking for container $i")
+      log.info(s"Asking for container $i")
       rmClient.addContainerRequest(containerAsk)
-      println(s"request for container $i sent")
+      log.info(s"request for container $i sent")
     }
-    println("Finished asking for containers")
+    log.info("Finished asking for containers")
   }
 
 
-  override def onContainersCompleted(statuses: util.List[ContainerStatus]) = ???
+  override def onContainersCompleted(statuses: util.List[ContainerStatus]) = {
+    for (status <- statuses.asScala) {
+      if (status.getState == ContainerState.COMPLETE) {
+        val containerId = status.getContainerId.getContainerId
+        val task = containersIdsToTask(containerId)
+        if (status.getExitStatus == 0) {
+          completedContainersAndTaskIds.put(containerId, task.id)
+          log.info(s"Container $containerId completed with task ${task.id} with success.")
+        } else {
+          log.warn(s"Container $containerId completed with task ${task.id} with failed status code (${status.getExitStatus}.")
+          val failedTries = failedTasksCounter.getOrElse(task.id, 0)
+          if (failedTries < MAX_ATTEMPTS_PER_TASK) {
+            log.info("Pushing task bback to queue and asking another container.")
+            tasksToRetry.enqueue(task)
+          } else {
+            log.error(s"Already tried task ${task.id} $MAX_ATTEMPTS_PER_TASK times. Time to say Bye-Bye.")
+            throw new YarnRuntimeException("Failed job")
+          }
+        }
+      }
+    }
+    if (getProgress == 1F) {
+      log.info("Finished all tasks successfully! Wow!")
+    }
+  }
 
-  override def getProgress = ???
+  override def getProgress = {
+    jobManager.registeredActions.size.toFloat / completedContainersAndTaskIds.size
+  }
 
-  override def onNodesUpdated(updatedNodes: util.List[NodeReport]) = ???
+  override def onNodesUpdated(updatedNodes: util.List[NodeReport]) = {
 
-  override def onShutdownRequest() = ???
+  }
 
-
-  //  override def onContainersAllocated(containers: util.List[Container]) = {
-  //
-  //    import scala.collection.JavaConversions._
-  //    for (container <- containers) {
-  //      try { // Launch container by create ContainerLaunchContext
-  //        val ctx = Records.newRecord(classOf[ContainerLaunchContext])
-  //        ctx.setCommands(Collections.singletonList(command + " 1>" + ApplicationConstants.LOG_DIR_EXPANSION_VAR + "/stdout" + " 2>" + ApplicationConstants.LOG_DIR_EXPANSION_VAR + "/stderr"))
-  //        System.out.println("[AM] Launching container " + container.getId)
-  //        nmClient.startContainerAsync(container, ctx)
-  //      } catch {
-  //        case ex: Exception =>
-  //          System.err.println("[AM] Error launching container " + container.getId + " " + ex)
-  //      }
-  //    }
-  //  }
+  override def onShutdownRequest() = {
+    log.error("Shutdown requested.")
+  }
 
   override def onContainersAllocated(containers: util.List[Container]): Unit = {
     log.info("containers allocated")
     for (container <- containers.asScala) { // Launch container by create ContainerLaunchContext
-      val containerTask = Future[String] {
+      val containerTask = Future[ActionData] {
 
-        val actionData = jobManager.getNextActionData
+        val actionData = if (tasksToRetry.isEmpty) {
+          jobManager.getNextActionData
+        } else {
+          tasksToRetry.dequeue()
+        }
         val taskData = DataLoader.getTaskData(actionData, env)
         val execData = DataLoader.getExecutorData(env)
 
         val ctx = Records.newRecord(classOf[ContainerLaunchContext])
         val command =
           s"""$awsEnv env AMA_NODE=${sys.env("AMA_NODE")}
-
-             | env SPARK_EXECUTOR_URI=http://${sys.env("AMA_NODE")}:${config.Webserver.Port}/dist/spark-${config.Webserver.sparkVersion}
-.tgz
-             | java -cp executor-0.2.0-all.jar:spark-${
-            config.
-              Webserver.sparkVersion
-          }
-/lib/*
+             | env SPARK_EXECUTOR_URI=http://${sys.env("AMA_NODE")}:${config.Webserver.Port}/dist/spark-${config.Webserver.sparkVersion}.tgz
+             | java -cp executor-0.2.0-all.jar:spark-${config.Webserver.sparkVersion}/lib/*
              | -Dscala.usejavacp=true
              | -Djava.library.path=/usr/lib org.apache.amaterasu.executor.yarn.executors.ActionsExecutorLauncher
-             | ${jobManager.jobId} ${config.master} ${actionData.name} ${
-            gson.
-
-              toJson(taskData)
-          } ${gson.toJson(execData)}""".stripMargin
-        ctx.setCommands(Collections.
-          singletonList(command))
-
-        //        ctx.setLocalResources(Map[String, LocalResource] (
-        //          "executor.jar" -> executorJar
-        //        ))
-
+             | ${jobManager.jobId} ${config.master} ${actionData.name} ${gson.toJson(taskData)} ${gson.toJson(execData)}
+            """.stripMargin
+        ctx.setCommands(Collections.singletonList(command))
+        ctx.setLocalResources(Map[String, LocalResource] (
+          "executor.jar" -> executorJar
+        ))
         nmClient.startContainerAsync(container, ctx)
-        actionData.id
+        actionData
       }
 
       containerTask onComplete {
         case Failure(t) => {
-          println(s"launching container failed: ${t.getMessage}")
+          log.info(s"launching container failed: ${t.getMessage}")
         }
 
-        case Success(actionDataId) => {
-          containersIdsToTaskIds.put(container.getId.getContainerId, actionDataId)
-          println(s"launching container succeeded: ${container.getId}")
+        case Success(actionData) => {
+          containersIdsToTask.put(container.getId.getContainerId, actionData)
+          log.info(s"launching container succeeded: ${container.getId}")
         }
       }
     }
   }
 
-  override def onError(e: Throwable) = ???
+  override def onError(e: Throwable) = {
+    log.error("Error on AM", e)
+  }
 
   def initJob(args: Args) = {
     val retryPolicy = new ExponentialBackoffRetry(1000, 3)

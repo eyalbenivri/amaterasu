@@ -19,6 +19,9 @@ case class Args(
     cmd
   }
 
+  override def toString: String = {
+    toCmdString
+  }
 }
 
 object Args {
