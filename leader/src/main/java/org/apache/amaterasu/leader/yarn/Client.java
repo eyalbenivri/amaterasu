@@ -106,6 +106,7 @@ public class Client {
 
         List<String> commands = Collections.singletonList(
                 "$JAVA_HOME/bin/java" +
+                        " -Dscala.usejavacp=false" +
                         " -Xmx256M" +
                         " org.apache.amaterasu.leader.yarn.ApplicationMaster " +
                         joinStrings(args) +
@@ -254,14 +255,15 @@ public class Client {
     }
 
     private void setupAppMasterEnv(Map<String, String> appMasterEnv) {
+        Apps.addToEnvironment(appMasterEnv,
+                ApplicationConstants.Environment.CLASSPATH.name(),
+                ApplicationConstants.Environment.PWD.$() + File.separator + "*");
+
         for (String c : conf.getStrings(
                 YarnConfiguration.YARN_APPLICATION_CLASSPATH,
                 YarnConfiguration.DEFAULT_YARN_APPLICATION_CLASSPATH)) {
             Apps.addToEnvironment(appMasterEnv, ApplicationConstants.Environment.CLASSPATH.name(),
                     c.trim());
         }
-        Apps.addToEnvironment(appMasterEnv,
-                ApplicationConstants.Environment.CLASSPATH.name(),
-                ApplicationConstants.Environment.PWD.$() + File.separator + "*");
     }
 }

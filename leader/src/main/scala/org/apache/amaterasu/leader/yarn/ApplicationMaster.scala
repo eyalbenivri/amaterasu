@@ -110,13 +110,19 @@ class ApplicationMaster extends AMRMClientAsync.CallbackHandler with Logging {
     propPath = System.getenv("PWD") + "/amaterasu.properties"
     props = new FileInputStream(new File(propPath))
 
-
     // no need for hdfs double check (nod to Aaron Rodgers)
     // jars on HDFS should have been verified by the YARN client
     conf = new YarnConfiguration()
     fs = FileSystem.get(conf)
 
     config = ClusterConfig(props)
+
+
+    try {
+      initJob(arguments)
+    } catch {
+      case e: Exception => println("------>" + e.getMessage)
+    }
 
     jarPath = new Path(config.YARN.hdfsJarsPath)
     //jarPathQualified = fs.makeQualified(jarPath)
@@ -140,7 +146,6 @@ class ApplicationMaster extends AMRMClientAsync.CallbackHandler with Logging {
     rmClient.init(conf)
     rmClient.start()
 
-    initJob(arguments)
 
     // Register with ResourceManager
     val appMasterHostname = NetUtils.getHostname
@@ -236,7 +241,7 @@ class ApplicationMaster extends AMRMClientAsync.CallbackHandler with Logging {
              | ${jobManager.jobId} ${config.master} ${actionData.name} ${gson.toJson(taskData)} ${gson.toJson(execData)}
             """.stripMargin
         ctx.setCommands(Collections.singletonList(command))
-        ctx.setLocalResources(Map[String, LocalResource] (
+        ctx.setLocalResources(Map[String, LocalResource](
           "executor.jar" -> executorJar
         ))
         nmClient.startContainerAsync(container, ctx)
@@ -261,11 +266,17 @@ class ApplicationMaster extends AMRMClientAsync.CallbackHandler with Logging {
   }
 
   def initJob(args: Args) = {
+    log.info("##############")
+    try {
     val retryPolicy = new ExponentialBackoffRetry(1000, 3)
     client = CuratorFrameworkFactory.newClient(config.zk, retryPolicy)
     client.start()
-
+    log.info("##############")
+    } catch {
+      case e: Exception => println("~~~~~~~~~~>" + e.getMessage)
+    }
     if (args.jobId != null && !args.jobId.isEmpty) {
+      log.info("resuming job" + args.jobId)
       jobManager = JobLoader.reloadJob(
         args.jobId,
         client,
@@ -273,13 +284,19 @@ class ApplicationMaster extends AMRMClientAsync.CallbackHandler with Logging {
         new LinkedBlockingQueue[ActionData])
 
     } else {
-      jobManager = JobLoader.loadJob(
-        args.repo,
-        args.branch,
-        args.newJobId,
-        client,
-        config.Jobs.Tasks.attempts,
-        new LinkedBlockingQueue[ActionData])
+      log.info("new job is being created")
+      try {
+
+        jobManager = JobLoader.loadJob(
+          args.repo,
+          args.branch,
+          args.newJobId,
+          client,
+          config.Jobs.Tasks.attempts,
+          new LinkedBlockingQueue[ActionData])
+      } catch {
+        case e: Exception => println("==========>" + e.getMessage)
+      }
     }
 
     log.info("created jobManager")

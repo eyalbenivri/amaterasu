@@ -79,7 +79,7 @@ done
 
 echo "repo: ${REPO} "
 export HADOOP_USER_CLASSPATH_FIRST=true
-CMD="yarn jar ${BASEDIR}/bin/leader-0.2.0-incubating-all.jar org.apache.amaterasu.leader.yarn.Client --home ${BASEDIR} --repo "https://github.com/roadan/amaterasu-job-sample.git""
+CMD="yarn jar ${BASEDIR}/bin/leader-0.2.0-incubating-all.jar org.apache.amaterasu.leader.yarn.Client --home ${BASEDIR}"
 
 if [ -n "$REPO" ]; then
     echo "repo is ${REPO}"
