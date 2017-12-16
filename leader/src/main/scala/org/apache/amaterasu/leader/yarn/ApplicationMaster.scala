@@ -159,6 +159,7 @@ class ApplicationMaster extends AMRMClientAsync.CallbackHandler with Logging {
     log.info(s"Created jobManager. jobManager.registeredActions.size: ${jobManager.registeredActions.size}")
 
     // Resource requirements for worker containers
+    // TODO: this should be per task based on the framework config
     val capability = Records.newRecord(classOf[Resource])
     capability.setMemory(Math.min(config.taskMem, 256))
     capability.setVirtualCores(1)
@@ -167,16 +168,30 @@ class ApplicationMaster extends AMRMClientAsync.CallbackHandler with Logging {
     var completedContainers = 0
     val version = this.getClass.getPackage.getImplementationVersion
 
+    while (!jobManager.outOfActions){
+
+      val actionData = jobManager.getNextActionData
+
+      if (actionData != null) {
+
+        // we have an action to schedule, let's request a container
+        val priority: Priority = Records.newRecord(classOf[Priority])
+        priority.setPriority(askedContainers)
+        val containerReq = new ContainerRequest(capability, null, null, priority)
+        rmClient.addContainerRequest(containerReq)
+
+      } else {
+        Thread.sleep(100)
+      }
+
+    }
+
+    log.info(s"Job ${arguments.jobId} finished")
     for (i <- 0 until jobManager.registeredActions.size) {
       // Priority for worker containers - priorities are intra-application
-      val priority: Priority = Records.newRecord(classOf[Priority])
-      priority.setPriority(askedContainers)
-      val containerAsk = new ContainerRequest(capability, null, null, priority)
-      log.info(s"Asking for container $i")
-      rmClient.addContainerRequest(containerAsk)
-      log.info(s"request for container $i sent")
+
     }
-    log.info("Finished asking for containers")
+
   }
 
 
@@ -221,6 +236,9 @@ class ApplicationMaster extends AMRMClientAsync.CallbackHandler with Logging {
   override def onContainersAllocated(containers: util.List[Container]): Unit = {
     log.info("containers allocated")
     for (container <- containers.asScala) { // Launch container by create ContainerLaunchContext
+
+      //container.getResource
+
       val containerTask = Future[ActionData] {
 
         val actionData = if (tasksToRetry.isEmpty) {
