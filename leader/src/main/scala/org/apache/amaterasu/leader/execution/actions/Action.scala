@@ -41,6 +41,7 @@ trait Action extends Logging {
 
     log.debug(s"Starting action ${data.name} of group ${data.groupId} and type ${data.typeId}")
     client.setData().forPath(actionPath, ActionStatus.started.toString.getBytes)
+    log.debug("Setting data statust")
     data.status = ActionStatus.started
   }
 

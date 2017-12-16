@@ -26,7 +26,6 @@ import org.apache.zookeeper.CreateMode
 import scala.collection.mutable.ListBuffer
 
 class SequentialAction extends Action {
-
   var jobId: String = _
   var jobsQueue: BlockingQueue[ActionData] = _
   var attempts: Int = 2
@@ -35,7 +34,7 @@ class SequentialAction extends Action {
   def execute(): Unit = {
 
     try {
-
+      log.info("Trying to add job to queue")
       announceQueued
       jobsQueue.add(data)
 
@@ -43,7 +42,9 @@ class SequentialAction extends Action {
     catch {
 
       //TODO: this will not invoke the error action
-      case e: Exception => handleFailure(e.getMessage)
+      case e: Exception =>
+        log.error("Error executing action", e)
+        handleFailure(e.getMessage)
 
     }
 

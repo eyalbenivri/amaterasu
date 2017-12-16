@@ -49,7 +49,7 @@ class JobManager extends Logging {
     * start mast be called once and by the JobManager only
     */
   def start(): Unit = {
-
+    log.debug("Starting jobReport")
     jobReport.append(
       s"""
          | ******************************************************************
@@ -59,7 +59,9 @@ class JobManager extends Logging {
        """.stripMargin
     )
     jobReport.append("\n")
+    log.debug("Executing head")
     head.execute()
+    log.debug("Head executing")
 
   }
 

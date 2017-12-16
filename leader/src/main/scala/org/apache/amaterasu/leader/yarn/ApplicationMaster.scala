@@ -50,6 +50,8 @@ import scala.concurrent.{Future, _}
 import scala.util.{Failure, Success}
 
 class ApplicationMaster extends AMRMClientAsync.CallbackHandler with Logging {
+  var capability:Resource = _
+
 
   private val MAX_ATTEMPTS_PER_TASK = 3
   log.info("ApplicationMaster start")
@@ -77,6 +79,7 @@ class ApplicationMaster extends AMRMClientAsync.CallbackHandler with Logging {
   private val completedContainersAndTaskIds: concurrent.Map[Long, String] = new ConcurrentHashMap[Long, String].asScala
   private val failedTasksCounter: concurrent.Map[String, Int] = new ConcurrentHashMap[String, Int].asScala
   private val tasksToRetry: mutable.Queue[ActionData] = new mutable.Queue[ActionData]()
+  private val actionsBuffer: mutable.Queue[ActionData] = new mutable.Queue[ActionData]()
   // this map holds the following structure:
   // slaveId
   //  |
@@ -160,26 +163,19 @@ class ApplicationMaster extends AMRMClientAsync.CallbackHandler with Logging {
 
     // Resource requirements for worker containers
     // TODO: this should be per task based on the framework config
-    val capability = Records.newRecord(classOf[Resource])
-    capability.setMemory(Math.min(config.taskMem, 256))
-    capability.setVirtualCores(1)
+    this.capability = Records.newRecord(classOf[Resource])
+    this.capability.setMemory(Math.min(config.taskMem, 256))
+    this.capability.setVirtualCores(1)
 
-    var askedContainers = 0
     var completedContainers = 0
     val version = this.getClass.getPackage.getImplementationVersion
 
-    while (!jobManager.outOfActions){
+    while (!jobManager.outOfActions || tasksToRetry.nonEmpty){
 
-      val actionData = jobManager.getNextActionData
+      val actionData = if (tasksToRetry.nonEmpty) tasksToRetry.dequeue() else jobManager.getNextActionData
 
       if (actionData != null) {
-
-        // we have an action to schedule, let's request a container
-        val priority: Priority = Records.newRecord(classOf[Priority])
-        priority.setPriority(askedContainers)
-        val containerReq = new ContainerRequest(capability, null, null, priority)
-        rmClient.addContainerRequest(containerReq)
-
+        askContainer(actionData)
       } else {
         Thread.sleep(100)
       }
@@ -187,13 +183,59 @@ class ApplicationMaster extends AMRMClientAsync.CallbackHandler with Logging {
     }
 
     log.info(s"Job ${arguments.jobId} finished")
-    for (i <- 0 until jobManager.registeredActions.size) {
-      // Priority for worker containers - priorities are intra-application
-
-    }
-
   }
 
+  private def askContainer(actionData: ActionData) = {
+    actionsBuffer.enqueue(actionData)
+    // we have an action to schedule, let's request a container
+    val priority: Priority = Records.newRecord(classOf[Priority])
+    priority.setPriority(1)
+    val containerReq = new ContainerRequest(capability, null, null, priority)
+    rmClient.addContainerRequest(containerReq)
+  }
+
+  override def onContainersAllocated(containers: util.List[Container]): Unit = {
+    log.info("containers allocated")
+    for (container <- containers.asScala) { // Launch container by create ContainerLaunchContext
+      if (actionsBuffer.isEmpty) {
+        log.warn("Why actionBuffer empty and i was called?")
+        return
+      }
+      val actionData = actionsBuffer.dequeue()
+      val containerTask = Future[ActionData] {
+        val taskData = DataLoader.getTaskData(actionData, env)
+        val execData = DataLoader.getExecutorData(env)
+
+        val ctx = Records.newRecord(classOf[ContainerLaunchContext])
+        val command =
+          s"""$awsEnv
+             | $$JAVA_HOME/bin/java -cp executor-0.2.0-all.jar:spark-${config.Webserver.sparkVersion}/lib/*
+             | -Dscala.usejavacp=true
+             | -Djava.library.path=/usr/lib org.apache.amaterasu.executor.yarn.executors.ActionsExecutorLauncher
+             | ${jobManager.jobId} ${config.master} ${actionData.name} ${gson.toJson(taskData)} ${gson.toJson(execData)}
+            """.stripMargin
+        log.info("Requesting container with command '{}'", command)
+        ctx.setCommands(Collections.singletonList(command))
+        ctx.setLocalResources(Map[String, LocalResource](
+          "executor.jar" -> executorJar
+        ))
+        nmClient.startContainerAsync(container, ctx)
+        actionData
+      }
+
+      containerTask onComplete {
+        case Failure(t) => {
+          log.error(s"launching container failed", t)
+          askContainer(actionData)
+        }
+
+        case Success(requestedActionData) => {
+          containersIdsToTask.put(container.getId.getContainerId, requestedActionData)
+          log.info(s"launching container succeeded: ${container.getId}")
+        }
+      }
+    }
+  }
 
   override def onContainersCompleted(statuses: util.List[ContainerStatus]) = {
     for (status <- statuses.asScala) {
@@ -204,11 +246,12 @@ class ApplicationMaster extends AMRMClientAsync.CallbackHandler with Logging {
           completedContainersAndTaskIds.put(containerId, task.id)
           log.info(s"Container $containerId completed with task ${task.id} with success.")
         } else {
-          log.warn(s"Container $containerId completed with task ${task.id} with failed status code (${status.getExitStatus}.")
-          val failedTries = failedTasksCounter.getOrElse(task.id, 0)
+          log.warn(s"Container $containerId completed with task ${task.id} with failed status code (${status.getExitStatus}).")
+          var failedTries = failedTasksCounter.getOrElse(task.id, 0)
           if (failedTries < MAX_ATTEMPTS_PER_TASK) {
-            log.info("Pushing task bback to queue and asking another container.")
-            tasksToRetry.enqueue(task)
+            log.info("Pushing task back to queue and asking another container.")
+            failedTasksCounter.put(task.id, failedTries + 1)
+            askContainer(task)
           } else {
             log.error(s"Already tried task ${task.id} $MAX_ATTEMPTS_PER_TASK times. Time to say Bye-Bye.")
             throw new YarnRuntimeException("Failed job")
@@ -233,65 +276,24 @@ class ApplicationMaster extends AMRMClientAsync.CallbackHandler with Logging {
     log.error("Shutdown requested.")
   }
 
-  override def onContainersAllocated(containers: util.List[Container]): Unit = {
-    log.info("containers allocated")
-    for (container <- containers.asScala) { // Launch container by create ContainerLaunchContext
-
-      //container.getResource
-
-      val containerTask = Future[ActionData] {
-
-        val actionData = if (tasksToRetry.isEmpty) {
-          jobManager.getNextActionData
-        } else {
-          tasksToRetry.dequeue()
-        }
-        val taskData = DataLoader.getTaskData(actionData, env)
-        val execData = DataLoader.getExecutorData(env)
-
-        val ctx = Records.newRecord(classOf[ContainerLaunchContext])
-        val command =
-          s"""$awsEnv env AMA_NODE=${sys.env("AMA_NODE")}
-             | env SPARK_EXECUTOR_URI=http://${sys.env("AMA_NODE")}:${config.Webserver.Port}/dist/spark-${config.Webserver.sparkVersion}.tgz
-             | java -cp executor-0.2.0-all.jar:spark-${config.Webserver.sparkVersion}/lib/*
-             | -Dscala.usejavacp=true
-             | -Djava.library.path=/usr/lib org.apache.amaterasu.executor.yarn.executors.ActionsExecutorLauncher
-             | ${jobManager.jobId} ${config.master} ${actionData.name} ${gson.toJson(taskData)} ${gson.toJson(execData)}
-            """.stripMargin
-        ctx.setCommands(Collections.singletonList(command))
-        ctx.setLocalResources(Map[String, LocalResource](
-          "executor.jar" -> executorJar
-        ))
-        nmClient.startContainerAsync(container, ctx)
-        actionData
-      }
-
-      containerTask onComplete {
-        case Failure(t) => {
-          log.info(s"launching container failed: ${t.getMessage}")
-        }
-
-        case Success(actionData) => {
-          containersIdsToTask.put(container.getId.getContainerId, actionData)
-          log.info(s"launching container succeeded: ${container.getId}")
-        }
-      }
-    }
-  }
-
   override def onError(e: Throwable) = {
     log.error("Error on AM", e)
   }
 
   def initJob(args: Args) = {
     log.info("##############")
+    this.env = args.env
+    this.branch = args.branch
+
     try {
-    val retryPolicy = new ExponentialBackoffRetry(1000, 3)
-    client = CuratorFrameworkFactory.newClient(config.zk, retryPolicy)
-    client.start()
-    log.info("##############")
+      val retryPolicy = new ExponentialBackoffRetry(1000, 3)
+      client = CuratorFrameworkFactory.newClient(config.zk, retryPolicy)
+      client.start()
+      log.info("##############")
     } catch {
-      case e: Exception => println("~~~~~~~~~~>" + e.getMessage)
+      case e: Exception =>
+        log.error("Error connecting to zookeeper", e)
+        throw e
     }
     if (args.jobId != null && !args.jobId.isEmpty) {
       log.info("resuming job" + args.jobId)
@@ -313,12 +315,20 @@ class ApplicationMaster extends AMRMClientAsync.CallbackHandler with Logging {
           config.Jobs.Tasks.attempts,
           new LinkedBlockingQueue[ActionData])
       } catch {
-        case e: Exception => println("==========>" + e.getMessage)
+        case e: Exception =>
+          log.error("Error creating JobManager.", e)
+          throw e
       }
     }
 
     log.info("created jobManager")
-    jobManager.start()
+    try {
+      jobManager.start()
+    } catch {
+      case e: Exception =>
+        log.error("Error starting JobManager.", e)
+        throw e
+    }
 
     log.info("started jobManager")
   }
