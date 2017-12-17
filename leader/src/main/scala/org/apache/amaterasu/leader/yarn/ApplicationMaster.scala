@@ -208,12 +208,12 @@ class ApplicationMaster extends AMRMClientAsync.CallbackHandler with Logging {
 
         val ctx = Records.newRecord(classOf[ContainerLaunchContext])
         val command =
-          s"""$awsEnv
-             | $$JAVA_HOME/bin/java -cp executor-0.2.0-all.jar:spark-${config.Webserver.sparkVersion}/lib/*
-             | -Dscala.usejavacp=true
-             | -Djava.library.path=/usr/lib org.apache.amaterasu.executor.yarn.executors.ActionsExecutorLauncher
-             | ${jobManager.jobId} ${config.master} ${actionData.name} ${gson.toJson(taskData)} ${gson.toJson(execData)}
-            """.stripMargin
+          "java -cp executor-0.2.0-all.jar " +
+            "-Dscala.usejavacp=true " +
+             "-Djava.library.path=/usr/lib " +
+             "org.apache.amaterasu.executor.yarn.executors.ActionsExecutorLauncher " +
+             s"${jobManager.jobId} ${config.master} ${actionData.name} ${gson.toJson(taskData)} ${gson.toJson(execData)}"
+
         log.info("Requesting container with command '{}'", command)
         ctx.setCommands(Collections.singletonList(command))
         ctx.setLocalResources(Map[String, LocalResource](
