@@ -1,6 +1,7 @@
 package org.apache.amaterasu.executor.yarn.executors
 
 import java.io.ByteArrayOutputStream
+import java.net.{URLDecoder, URLEncoder}
 import java.util.UUID
 
 import com.google.gson.Gson
@@ -31,8 +32,8 @@ object ActionsExecutorLauncher extends App with Logging {
   val jobId = this.args(0)
   val master = this.args(1)
   val actionName = this.args(2)
-  val taskData = gson.fromJson[TaskData](this.args(3), TaskData.getClass)
-  val execData = gson.fromJson[ExecData](this.args(4), ExecData.getClass)
+  val taskData = gson.fromJson[TaskData](URLDecoder.decode(this.args(3), "UTF-8"), TaskData.getClass)
+  val execData = gson.fromJson[ExecData](URLDecoder.decode(this.args(4), "UTF-8"), ExecData.getClass)
 
   val actionsExecutor:ActionsExecutor = new ActionsExecutor
   actionsExecutor.master = master

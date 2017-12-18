@@ -19,10 +19,11 @@ package org.apache.amaterasu.leader.yarn
 import java.io.{File, FileInputStream, InputStream}
 import java.util
 import java.util.Collections
-import java.util.concurrent.{ConcurrentHashMap, LinkedBlockingQueue}
 import java.util.concurrent.locks.ReentrantLock
+import java.util.concurrent.{ConcurrentHashMap, LinkedBlockingQueue}
 
 import com.google.gson.Gson
+import java.net.URLEncoder
 import org.apache.amaterasu.common.configuration.ClusterConfig
 import org.apache.amaterasu.common.configuration.enums.ActionStatus.ActionStatus
 import org.apache.amaterasu.common.dataobjects.ActionData
@@ -39,14 +40,13 @@ import org.apache.hadoop.yarn.client.api.AMRMClient.ContainerRequest
 import org.apache.hadoop.yarn.client.api.async.impl.NMClientAsyncImpl
 import org.apache.hadoop.yarn.client.api.async.{AMRMClientAsync, NMClientAsync}
 import org.apache.hadoop.yarn.conf.YarnConfiguration
-import org.apache.hadoop.yarn.exceptions.YarnRuntimeException
 import org.apache.hadoop.yarn.util.{ConverterUtils, Records}
 
 import scala.collection.JavaConversions._
 import scala.collection.JavaConverters._
-import scala.collection.{concurrent, mutable}
+import scala.collection.concurrent
 import scala.concurrent.ExecutionContext.Implicits.global
-import scala.concurrent.{Future, _}
+import scala.concurrent.Future
 import scala.util.{Failure, Success}
 
 class ApplicationMaster extends AMRMClientAsync.CallbackHandler with Logging {
@@ -78,8 +78,8 @@ class ApplicationMaster extends AMRMClientAsync.CallbackHandler with Logging {
   private val containersIdsToTask: concurrent.Map[Long, ActionData] = new ConcurrentHashMap[Long, ActionData].asScala
   private val completedContainersAndTaskIds: concurrent.Map[Long, String] = new ConcurrentHashMap[Long, String].asScala
   private val failedTasksCounter: concurrent.Map[String, Int] = new ConcurrentHashMap[String, Int].asScala
-  private val tasksToRetry: mutable.Queue[ActionData] = new mutable.Queue[ActionData]()
-  private val actionsBuffer: mutable.Queue[ActionData] = new mutable.Queue[ActionData]()
+  private val tasksToRetry: java.util.concurrent.ConcurrentLinkedQueue[ActionData] = new java.util.concurrent.ConcurrentLinkedQueue[ActionData]()
+  private val actionsBuffer: java.util.concurrent.ConcurrentLinkedQueue[ActionData] = new java.util.concurrent.ConcurrentLinkedQueue[ActionData]()
   // this map holds the following structure:
   // slaveId
   //  |
@@ -133,6 +133,7 @@ class ApplicationMaster extends AMRMClientAsync.CallbackHandler with Logging {
     this.version = config.version
 
     executorPath = Path.mergePaths(jarPath, new Path(s"/dist/executor-${this.version}-all.jar"))
+    log.info("Executor jar path is {}", executorPath)
     executorJar = setLocalResourceFromPath(executorPath)
 
     log.info("Started execute")
@@ -171,50 +172,49 @@ class ApplicationMaster extends AMRMClientAsync.CallbackHandler with Logging {
     val version = this.getClass.getPackage.getImplementationVersion
 
     while (!jobManager.outOfActions || tasksToRetry.nonEmpty){
-
-      val actionData = if (tasksToRetry.nonEmpty) tasksToRetry.dequeue() else jobManager.getNextActionData
-
+      val actionData = if (tasksToRetry.nonEmpty) tasksToRetry.poll() else jobManager.getNextActionData
       if (actionData != null) {
         askContainer(actionData)
       } else {
         Thread.sleep(100)
       }
-
     }
-
-    log.info(s"Job ${arguments.jobId} finished")
+    log.info("Finished asking for containers")
   }
 
   private def askContainer(actionData: ActionData) = {
-    actionsBuffer.enqueue(actionData)
+    actionsBuffer.add(actionData)
+    log.info(s"About to ask container for action ${actionData.id}. Action buffer size is: ${actionsBuffer.size()}")
     // we have an action to schedule, let's request a container
     val priority: Priority = Records.newRecord(classOf[Priority])
     priority.setPriority(1)
     val containerReq = new ContainerRequest(capability, null, null, priority)
     rmClient.addContainerRequest(containerReq)
+    log.info(s"Asked container for action ${actionData.id}")
   }
 
   override def onContainersAllocated(containers: util.List[Container]): Unit = {
-    log.info("containers allocated")
+    log.info(s"${containers.size()} Containers allocated")
     for (container <- containers.asScala) { // Launch container by create ContainerLaunchContext
       if (actionsBuffer.isEmpty) {
-        log.warn("Why actionBuffer empty and i was called?")
+        log.warn(s"Why actionBuffer empty and i was called?. Container ids: ${containers.map(c => c.getId.getContainerId)}")
         return
       }
-      val actionData = actionsBuffer.dequeue()
+      val actionData = actionsBuffer.poll()
       val containerTask = Future[ActionData] {
         val taskData = DataLoader.getTaskData(actionData, env)
         val execData = DataLoader.getExecutorData(env)
 
         val ctx = Records.newRecord(classOf[ContainerLaunchContext])
         val command =
-          "java -cp executor-0.2.0-all.jar " +
+          s"java -cp executor.jar " +
             "-Dscala.usejavacp=true " +
              "-Djava.library.path=/usr/lib " +
              "org.apache.amaterasu.executor.yarn.executors.ActionsExecutorLauncher " +
-             s"${jobManager.jobId} ${config.master} ${actionData.name} ${gson.toJson(taskData)} ${gson.toJson(execData)}"
+             s"'${jobManager.jobId}' '${config.master}' '${actionData.name}' '${URLEncoder.encode(gson.toJson(taskData), "UTF-8")}' '${URLEncoder.encode(gson.toJson(execData), "UTF-8")}' " +
+            s"> /var/log/amaterasu/amaterasu-executor-${container.getId.getContainerId}.log"
 
-        log.info("Requesting container with command '{}'", command)
+        log.info("Running container id {} with command '{}'", container.getId.getContainerId, command)
         ctx.setCommands(Collections.singletonList(command))
         ctx.setLocalResources(Map[String, LocalResource](
           "executor.jar" -> executorJar
@@ -231,10 +231,26 @@ class ApplicationMaster extends AMRMClientAsync.CallbackHandler with Logging {
 
         case Success(requestedActionData) => {
           containersIdsToTask.put(container.getId.getContainerId, requestedActionData)
-          log.info(s"launching container succeeded: ${container.getId}")
+          log.info(s"launching container succeeded: ${container.getId.getContainerId}; task: ${requestedActionData.id}")
         }
       }
     }
+  }
+
+  def stopApplication(finalApplicationStatus: FinalApplicationStatus, appMessage: String) = {
+    import java.io.IOException
+
+    import org.apache.hadoop.yarn.exceptions.YarnException
+    try
+      rmClient.unregisterApplicationMaster(finalApplicationStatus, appMessage, null)
+    catch {
+      case ex: YarnException =>
+        log.error("Failed to unregister application", ex)
+      case e: IOException =>
+        log.error("Failed to unregister application", e)
+    }
+    rmClient.stop()
+    nmClient.stop()
   }
 
   override def onContainersCompleted(statuses: util.List[ContainerStatus]) = {
@@ -242,6 +258,7 @@ class ApplicationMaster extends AMRMClientAsync.CallbackHandler with Logging {
       if (status.getState == ContainerState.COMPLETE) {
         val containerId = status.getContainerId.getContainerId
         val task = containersIdsToTask(containerId)
+        rmClient.releaseAssignedContainer(status.getContainerId)
         if (status.getExitStatus == 0) {
           completedContainersAndTaskIds.put(containerId, task.id)
           log.info(s"Container $containerId completed with task ${task.id} with success.")
@@ -254,13 +271,16 @@ class ApplicationMaster extends AMRMClientAsync.CallbackHandler with Logging {
             askContainer(task)
           } else {
             log.error(s"Already tried task ${task.id} $MAX_ATTEMPTS_PER_TASK times. Time to say Bye-Bye.")
-            throw new YarnRuntimeException("Failed job")
+            stopApplication(FinalApplicationStatus.FAILED, s"Task ${task.id} could not be completed.")
           }
         }
       }
     }
-    if (getProgress == 1F) {
+    if (jobManager.registeredActions.size == completedContainersAndTaskIds.size) {
       log.info("Finished all tasks successfully! Wow!")
+      stopApplication(FinalApplicationStatus.SUCCEEDED, "SUCCESS")
+    } else {
+      log.info(s"jobManager.registeredActions.size: ${jobManager.registeredActions.size}; completedContainersAndTaskIds.size: ${completedContainersAndTaskIds.size}")
     }
   }
 
@@ -269,15 +289,17 @@ class ApplicationMaster extends AMRMClientAsync.CallbackHandler with Logging {
   }
 
   override def onNodesUpdated(updatedNodes: util.List[NodeReport]) = {
-
+    log.info("Nodes change. Nothing to report.")
   }
 
   override def onShutdownRequest() = {
     log.error("Shutdown requested.")
+    stopApplication(FinalApplicationStatus.KILLED, "Shutdown requested")
   }
 
   override def onError(e: Throwable) = {
     log.error("Error on AM", e)
+    stopApplication(FinalApplicationStatus.FAILED, "Error on AM")
   }
 
   def initJob(args: Args) = {

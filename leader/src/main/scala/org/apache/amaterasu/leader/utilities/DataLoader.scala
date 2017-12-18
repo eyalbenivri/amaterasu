@@ -26,7 +26,6 @@ import org.apache.amaterasu.common.dataobjects.{ActionData, ExecData, TaskData}
 import org.apache.amaterasu.common.execution.dependencies.Dependencies
 import org.apache.amaterasu.common.logging.Logging
 import org.apache.amaterasu.common.runtime.Environment
-import org.apache.mesos.protobuf.ByteString
 import org.yaml.snakeyaml.Yaml
 
 import scala.collection.JavaConverters._
@@ -42,21 +41,20 @@ object DataLoader extends Logging {
   val ymlMapper = new ObjectMapper(new YAMLFactory())
   ymlMapper.registerModule(DefaultScalaModule)
 
-  def getTaskData(actionData: ActionData, env: String): ByteString = {
-
+  def getTaskData(actionData: ActionData, env: String): TaskData = {
     val srcFile = actionData.src
     val src = Source.fromFile(s"repo/src/$srcFile").mkString
     val envValue = Source.fromFile(s"repo/env/$env/job.yml").mkString
 
     val envData = ymlMapper.readValue(envValue, classOf[Environment])
-
-    val data = mapper.writeValueAsBytes(TaskData(src, envData, actionData.groupId, actionData.typeId, actionData.exports))
-    ByteString.copyFrom(data)
-
+    TaskData(src, envData, actionData.groupId, actionData.typeId, actionData.exports)
   }
 
-  def getExecutorData(env: String): ByteString = {
+  def getTaskDataBytes(actionData: ActionData, env: String): Array[Byte] = {
+    mapper.writeValueAsBytes(getTaskData(actionData, env))
+  }
 
+  def getExecutorData(env: String): ExecData = {
     // loading the job configuration
     val envValue = Source.fromFile(s"repo/env/$env/job.yml").mkString //TODO: change this to YAML
     val envData = ymlMapper.readValue(envValue, classOf[Environment])
@@ -73,8 +71,11 @@ object DataLoader extends Logging {
       depsData = ymlMapper.readValue(depsValue, classOf[Dependencies])
     }
 
-    val data = mapper.writeValueAsBytes(ExecData(envData, depsData, config))
-    ByteString.copyFrom(data)
+    ExecData(envData, depsData, config)
+  }
+
+  def getExecutorDataBytes(env: String): Array[Byte] = {
+    mapper.writeValueAsBytes(getExecutorData(env))
   }
 
   def yamlToMap(file: File): (String, Map[String, Any]) = {

@@ -17,21 +17,18 @@
 package org.apache.amaterasu.leader.mesos.schedulers
 
 import java.util
-import java.util.{Collections, UUID}
 import java.util.concurrent.locks.ReentrantLock
 import java.util.concurrent.{ConcurrentHashMap, LinkedBlockingQueue}
 import java.util.{Collections, UUID}
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.scala.DefaultScalaModule
-import org.apache.amaterasu.leader.execution.JobManager
-import org.apache.amaterasu.leader.utilities.DataLoader
 import org.apache.amaterasu.common.configuration.ClusterConfig
 import org.apache.amaterasu.common.configuration.enums.ActionStatus
 import org.apache.amaterasu.common.configuration.enums.ActionStatus.ActionStatus
 import org.apache.amaterasu.common.dataobjects.ActionData
-import org.apache.amaterasu.common.execution.actions._
 import org.apache.amaterasu.common.execution.actions.NotificationLevel.NotificationLevel
+import org.apache.amaterasu.common.execution.actions._
 import org.apache.amaterasu.leader.execution.{JobLoader, JobManager}
 import org.apache.amaterasu.leader.utilities.{DataLoader, HttpServer}
 import org.apache.curator.framework.{CuratorFramework, CuratorFrameworkFactory}
@@ -167,7 +164,7 @@ class JobScheduler extends AmaterasuScheduler {
               }
               else {
 
-                val execData = DataLoader.getExecutorData(env)
+                val execData = ByteString.copyFrom(DataLoader.getExecutorDataBytes(env))
                 //TODO: wait for Eyal's refactoring to extract the containers params
                 //val extraJavaOps = execData...
 
@@ -206,7 +203,7 @@ class JobScheduler extends AmaterasuScheduler {
               .setSlaveId(offer.getSlaveId)
               .setExecutor(executor)
 
-              .setData(DataLoader.getTaskData(actionData, env))
+              .setData(ByteString.copyFrom(DataLoader.getTaskDataBytes(actionData, env)))
               .addResources(createScalarResource("cpus", config.Jobs.Tasks.cpus))
               .addResources(createScalarResource("mem", config.Jobs.Tasks.mem))
               .addResources(createScalarResource("disk", config.Jobs.repoSize))

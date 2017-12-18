@@ -139,12 +139,12 @@ public class Client {
 
         // get local resources pointers that will be set on the master container env
         String leaderJarPath = String.format("/bin/leader-%s-all.jar", version);
-        LOGGER.info("Leader Jar path is: ", leaderJarPath);
+        LOGGER.info("Leader Jar path is: {}", leaderJarPath);
         Path mergedPath = Path.mergePaths(jarPath, new Path(leaderJarPath));
 
         // System.out.println("===> path: " + jarPathQualified);
 
-        LOGGER.info(mergedPath.getName());
+        LOGGER.info("Leader merged jar path is: {}", mergedPath);
         LocalResource leaderJar = null;
         LocalResource propFile = null;
         LocalResource log4jPropFile = null;
@@ -232,7 +232,7 @@ public class Client {
                 appState != YarnApplicationState.KILLED &&
                 appState != YarnApplicationState.FAILED);
 
-        LOGGER.info("Application {} finished with state {} at {}", appId, appState, appReport.getFinishTime());
+        LOGGER.info("Application {} finished with state {}-{} at {}", appId, appState, appReport.getFinalApplicationStatus(), appReport.getFinishTime());
     }
 
     public static void main(String[] args) throws Exception {
