@@ -47,12 +47,14 @@ class ClusterConfig extends Logging {
     var queue:String = "default"
     var hdfsJarsPath: String = ""
     var master: Master = new Master()
+    var spark: Spark = new Spark()
 
     def load(props: Properties): Unit = {
       if(props.containsKey("yarn.queue")) queue = props.getProperty("yarn.queue")
       if(props.containsKey("yarn.jarspath")) hdfsJarsPath = props.getProperty("yarn.jarspath")
 
       this.master.load(props)
+      this.spark.load(props)
     }
 
     class Master {
@@ -74,6 +76,14 @@ class ClusterConfig extends Logging {
       def load(props: Properties): Unit = {
         if(props.containsKey("yarn.worker.cores")) Master.cores = props.getProperty("yarn.worker.cores").asInstanceOf[Int]
         if(props.containsKey("yarn.worker.memoryMB")) Master.memoryMB = props.getProperty("yarn.worker.memoryMB").asInstanceOf[Int]
+      }
+    }
+
+    class Spark {
+      var lib: String = ""
+
+      def  load(props: Properties): Unit = {
+        if(props.containsKey("yarn.spark.lib")) spark.lib = props.getProperty("yarn.spark.lib")
       }
     }
 

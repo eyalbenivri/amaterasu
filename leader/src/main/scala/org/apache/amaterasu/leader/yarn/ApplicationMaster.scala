@@ -30,13 +30,14 @@ import org.apache.amaterasu.common.configuration.enums.ActionStatus.ActionStatus
 import org.apache.amaterasu.common.dataobjects.ActionData
 import org.apache.amaterasu.common.execution.actions.NotificationLevel.NotificationLevel
 import org.apache.amaterasu.common.logging.Logging
+
 import org.apache.amaterasu.leader.execution.{JobLoader, JobManager}
 import org.apache.amaterasu.leader.utilities.{Args, DataLoader}
+
 import org.apache.curator.framework.{CuratorFramework, CuratorFrameworkFactory}
 import org.apache.curator.retry.ExponentialBackoffRetry
+
 import org.apache.hadoop.fs.{FileSystem, Path}
-import org.apache.hadoop.net.NetUtils
-import org.apache.hadoop.yarn.api.ApplicationConstants
 import org.apache.hadoop.yarn.api.records._
 import org.apache.hadoop.yarn.client.api.AMRMClient.ContainerRequest
 import org.apache.hadoop.yarn.client.api.async.impl.NMClientAsyncImpl
@@ -47,16 +48,19 @@ import org.apache.hadoop.yarn.util.{ConverterUtils, Records}
 import scala.collection.JavaConversions._
 import scala.collection.JavaConverters._
 import scala.collection.concurrent
+
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.Future
+
 import scala.util.{Failure, Success}
 
 class ApplicationMaster extends AMRMClientAsync.CallbackHandler with Logging {
-  var capability: Resource = _
 
+  var capability: Resource = _
 
   private val MAX_ATTEMPTS_PER_TASK = 3
   log.info("ApplicationMaster start")
+
   private var jobManager: JobManager = _
   private var client: CuratorFramework = _
   private var config: ClusterConfig = _
@@ -215,12 +219,10 @@ class ApplicationMaster extends AMRMClientAsync.CallbackHandler with Logging {
 
         val ctx = Records.newRecord(classOf[ContainerLaunchContext])
         val command =
-          s"java -cp executor.jar " +
+            s"java -cp executor.jar:${config.YARN.spark.lib}* " +
             "-Dscala.usejavacp=true " +
             "org.apache.amaterasu.executor.yarn.executors.ActionsExecutorLauncher " +
             s"'${jobManager.jobId}' '${config.master}' '${actionData.name}' '${URLEncoder.encode(gson.toJson(taskData), "UTF-8")}' '${URLEncoder.encode(gson.toJson(execData), "UTF-8")}' " //+
-//            " 1>" + ApplicationConstants.LOG_DIR_EXPANSION_VAR + "/stdout" +
-//            " 2>" + ApplicationConstants.LOG_DIR_EXPANSION_VAR + "/stderr"
 
         log.info("Running container id {} with command '{}'", container.getId.getContainerId, command)
         ctx.setCommands(Collections.singletonList(command))
