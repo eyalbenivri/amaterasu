@@ -218,9 +218,9 @@ class ApplicationMaster extends AMRMClientAsync.CallbackHandler with Logging {
           s"java -cp executor.jar " +
             "-Dscala.usejavacp=true " +
             "org.apache.amaterasu.executor.yarn.executors.ActionsExecutorLauncher " +
-            s"'${jobManager.jobId}' '${config.master}' '${actionData.name}' '${URLEncoder.encode(gson.toJson(taskData), "UTF-8")}' '${URLEncoder.encode(gson.toJson(execData), "UTF-8")}' " +
-            " 1>" + ApplicationConstants.LOG_DIR_EXPANSION_VAR + "/stdout" +
-            " 2>" + ApplicationConstants.LOG_DIR_EXPANSION_VAR + "/stderr"
+            s"'${jobManager.jobId}' '${config.master}' '${actionData.name}' '${URLEncoder.encode(gson.toJson(taskData), "UTF-8")}' '${URLEncoder.encode(gson.toJson(execData), "UTF-8")}' " //+
+//            " 1>" + ApplicationConstants.LOG_DIR_EXPANSION_VAR + "/stdout" +
+//            " 2>" + ApplicationConstants.LOG_DIR_EXPANSION_VAR + "/stderr"
 
         log.info("Running container id {} with command '{}'", container.getId.getContainerId, command)
         ctx.setCommands(Collections.singletonList(command))
