@@ -28,10 +28,14 @@ class ActionsExecutor {
 // launched with args:
 // ${jobManager.jobId} ${config.master} ${gson.toJson(taskData)} ${gson.toJson(execData)}
 object ActionsExecutorLauncher extends App with Logging {
+
+  log.info("Starting actions executor")
   val gson = new Gson()
   val jobId = this.args(0)
   val master = this.args(1)
   val actionName = this.args(2)
+
+  log.info("parsing task data")
   val taskData = gson.fromJson[TaskData](URLDecoder.decode(this.args(3), "UTF-8"), TaskData.getClass)
   val execData = gson.fromJson[ExecData](URLDecoder.decode(this.args(4), "UTF-8"), ExecData.getClass)
 

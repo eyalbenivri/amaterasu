@@ -16,7 +16,7 @@
  */
 package org.apache.amaterasu.leader.execution
 
-import java.util.concurrent.BlockingQueue
+import java.util.concurrent.{BlockingQueue, TimeUnit}
 
 import org.apache.amaterasu.common.configuration.enums.ActionStatus
 import org.apache.amaterasu.common.dataobjects.ActionData
@@ -77,7 +77,7 @@ class JobManager extends Logging {
     */
   def getNextActionData: ActionData = {
 
-    val nextAction: ActionData = executionQueue.poll()
+    val nextAction: ActionData = executionQueue.poll(200, TimeUnit.MILLISECONDS)
 
     if (nextAction != null) {
       registeredActions.get(nextAction.id).get.announceStart
