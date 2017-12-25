@@ -21,8 +21,10 @@ import org.apache.amaterasu.common.configuration.ClusterConfig;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.LocalFileSystem;
 import org.apache.hadoop.fs.Path;
 
+import org.apache.hadoop.hdfs.DistributedFileSystem;
 import org.apache.hadoop.yarn.api.ApplicationConstants;
 import org.apache.hadoop.yarn.api.records.*;
 import org.apache.hadoop.yarn.client.api.YarnClient;
@@ -67,8 +69,8 @@ public class Client {
 //        conf.addResource(new Path("/etc/hadoop/conf/core-site.xml"));
 //        conf.addResource(new Path("/etc/hadoop/conf/hdfs-site.xml"));
 //        conf.addResource(new Path("/etc/hadoop/conf/yarn-site.xml"));
-//        conf.set("fs.hdfs.impl", DistributedFileSystem.class.getName());
-//        conf.set("fs.file.impl", LocalFileSystem.class.getName());
+        conf.set("fs.hdfs.impl", DistributedFileSystem.class.getName());
+        conf.set("fs.file.impl", LocalFileSystem.class.getName());
 
         // Create yarnClient
         YarnClient yarnClient = YarnClient.createYarnClient();
@@ -95,7 +97,7 @@ public class Client {
             System.exit(3);
         }
         Path jarPath = new Path(config.YARN().hdfsJarsPath());
-        //Path jarPathQualified = fs.makeQualified(jarPath);
+        Path jarPathQualified = fs.makeQualified(jarPath);
 
         ApplicationSubmissionContext appContext = app.getApplicationSubmissionContext();
 
@@ -121,18 +123,18 @@ public class Client {
         amContainer.setCommands(commands);
 
         // Setup local ama folder on hdfs.
-//        try {
-//            if (!fs.exists(jarPathQualified)) {
-//                File home = new File(opts.home);
-//                for (File f : home.listFiles()) {
-//                    fs.mkdirs(jarPathQualified);
-//                    fs.copyFromLocalFile(false, true, new Path(f.getAbsolutePath()), jarPathQualified);
-//                }
-//            }
-//        } catch (IOException e) {
-//            LOGGER.error("Error uploading ama folder to HDFS.", e);
-//            System.exit(3);
-//        }
+        try {
+            if (!fs.exists(jarPathQualified)) {
+                File home = new File(opts.home);
+                for (File f : home.listFiles()) {
+                    fs.mkdirs(jarPathQualified);
+                    fs.copyFromLocalFile(false, true, new Path(f.getAbsolutePath()), jarPathQualified);
+                }
+            }
+        } catch (IOException e) {
+            LOGGER.error("Error uploading ama folder to HDFS.", e);
+            System.exit(3);
+        }
 
         // get version of build
         String version = config.version();
@@ -176,18 +178,6 @@ public class Client {
         capability.setMemory(config.YARN().master().memoryMB());
         capability.setVirtualCores(config.YARN().master().cores());
 
-        // Setup jar for ApplicationMaster
-//        LocalResource appMasterJar = Records.newRecord(LocalResource.class);
-
-//        try {
-//            setupAppMasterJar(mergedPath, appMasterJar);
-//        } catch (IOException e) {
-//            LOGGER.error("Error initializing yarn jar on am.", e);
-//            System.exit(5);
-//        }
-//        LOGGER.info("===> {}", appMasterJar);
-//        amContainer.setLocalResources(Collections.singletonMap("amaterasu-yarn.jar", appMasterJar));
-
         // Finally, set-up ApplicationSubmissionContext for the application
         appContext.setApplicationName("amaterasu-" + opts.name);
         appContext.setAMContainerSpec(amContainer);
@@ -213,12 +203,6 @@ public class Client {
 
         do {
             try {
-                Thread.sleep(1000);
-            } catch (InterruptedException e) {
-                LOGGER.error("Interrupted while waiting for job completion.", e);
-                System.exit(137);
-            }
-            try {
                 appReport = yarnClient.getApplicationReport(appId);
             } catch (YarnException e) {
                 LOGGER.error("Error getting application report.", e);
@@ -228,11 +212,25 @@ public class Client {
                 System.exit(9);
             }
             appState = appReport.getYarnApplicationState();
-        } while (appState != YarnApplicationState.FINISHED &&
-                appState != YarnApplicationState.KILLED &&
-                appState != YarnApplicationState.FAILED);
+            if (isAppFinished(appState)) {
+                break;
+            }
+            //LOGGER.info("Application not finished ({})", appReport.getProgress());
+            try {
+                Thread.sleep(100);
+            } catch (InterruptedException e) {
+                LOGGER.error("Interrupted while waiting for job completion.", e);
+                System.exit(137);
+            }
+        } while (!isAppFinished(appState));
 
         LOGGER.info("Application {} finished with state {}-{} at {}", appId, appState, appReport.getFinalApplicationStatus(), appReport.getFinishTime());
+    }
+
+    private boolean isAppFinished(YarnApplicationState appState) {
+        return appState == YarnApplicationState.FINISHED ||
+                appState == YarnApplicationState.KILLED ||
+                appState == YarnApplicationState.FAILED;
     }
 
     public static void main(String[] args) throws Exception {

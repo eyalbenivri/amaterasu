@@ -21,6 +21,10 @@ import java.nio.file.Paths
 import java.util.Properties
 
 import org.apache.amaterasu.common.logging.Logging
+import org.apache.commons.configuration.ConfigurationException
+
+import scala.collection.mutable
+import scala.collection.mutable.ListBuffer
 
 class ClusterConfig extends Logging {
 
@@ -29,6 +33,7 @@ class ClusterConfig extends Logging {
   var version: String = ""
   var user: String = ""
   var zk: String = ""
+  var mode: String = ""
   var master: String = "127.0.0.1"
   var masterPort: String = "5050"
   var timeout: Double = 600000
@@ -80,10 +85,18 @@ class ClusterConfig extends Logging {
     }
 
     class Spark {
-      var lib: String = ""
-
+      var home: String = ""
+      var opts: mutable.Map[String, String] = mutable.Map()
       def  load(props: Properties): Unit = {
-        if(props.containsKey("yarn.spark.lib")) spark.lib = props.getProperty("yarn.spark.lib")
+        if(props.containsKey("yarn.spark.home")) spark.home = props.getProperty("yarn.spark.home")
+        import scala.collection.JavaConversions._
+        for(key <- props.propertyNames()) {
+          if (key.toString.startsWith("spark.opts.")) {
+            val value = props.getProperty(key.toString)
+            val newKey = key.toString.replace("spark.opts.", "")
+            opts.put(newKey, value)
+          }
+        }
       }
     }
 
@@ -172,6 +185,12 @@ class ClusterConfig extends Logging {
     load(DEFAULT_FILE)
   }
 
+  def validationCheck(): Unit = {
+    if (!Array("yarn", "mesos").contains(mode)) {
+      throw new ConfigurationException(s"mode $mode is not legal. Options are 'yarn' or 'mesos'!")
+    }
+  }
+
   def load(file: InputStream): Unit = {
     val props: Properties = new Properties()
 
@@ -184,12 +203,8 @@ class ClusterConfig extends Logging {
     if (props.containsKey("master")) master = props.getProperty("master")
     if (props.containsKey("masterPort")) masterPort = props.getProperty("masterPort")
     if (props.containsKey("timeout")) timeout = props.getProperty("timeout").asInstanceOf[Double]
-    if (props.containsKey("workingFolder")) {
-      workingFolder = props.getProperty("workingFolder")
-    }
-    else {
-      workingFolder = s"/user/$user"
-    }
+    if (props.containsKey("mode")) mode = props.getProperty("mode")
+    if (props.containsKey("workingFolder")) workingFolder = props.getProperty("workingFolder", s"/user/$user")
 
     // TODO: rethink this
     Jar = this.getClass.getProtectionDomain.getCodeSource.getLocation.toURI.getPath
@@ -207,6 +222,8 @@ class ClusterConfig extends Logging {
 
     }
     AWS.load(props)
+
+    validationCheck()
   }
 
 }

@@ -64,13 +64,9 @@ class ApplicationMaster extends AMRMClientAsync.CallbackHandler with Logging {
   private var jobManager: JobManager = _
   private var client: CuratorFramework = _
   private var config: ClusterConfig = _
-  private var src: String = _
   private var env: String = _
   private var branch: String = _
-  private var resume: Boolean = false
-  private var reportLevel: NotificationLevel = _
   private var fs: FileSystem = _
-  private var awsEnv: String = ""
   private var conf: YarnConfiguration = _
   private var propPath: String = ""
   private var props: InputStream = _
@@ -78,27 +74,15 @@ class ApplicationMaster extends AMRMClientAsync.CallbackHandler with Logging {
   private var version: String = ""
   private var executorPath: Path = _
   private var executorJar: LocalResource = _
+  private var propFile:LocalResource = _
+  private var nmClient: NMClientAsync = _
+  private var allocListener: YarnRMCallbackHandler = _
+  private var rmClient: AMRMClientAsync[ContainerRequest] = _
 
   private val containersIdsToTask: concurrent.Map[Long, ActionData] = new ConcurrentHashMap[Long, ActionData].asScala
   private val completedContainersAndTaskIds: concurrent.Map[Long, String] = new ConcurrentHashMap[Long, String].asScala
-  private val failedTasksCounter: concurrent.Map[String, Int] = new ConcurrentHashMap[String, Int].asScala
-  private val tasksToRetry: java.util.concurrent.ConcurrentLinkedQueue[ActionData] = new java.util.concurrent.ConcurrentLinkedQueue[ActionData]()
   private val actionsBuffer: java.util.concurrent.ConcurrentLinkedQueue[ActionData] = new java.util.concurrent.ConcurrentLinkedQueue[ActionData]()
-  // this map holds the following structure:
-  // slaveId
-  //  |
-  //  +-> taskId, actionStatus)
-  private val executionMap: concurrent.Map[String, concurrent.Map[String, ActionStatus]] = new ConcurrentHashMap[String, concurrent.Map[String, ActionStatus]].asScala
-  private val lock = new ReentrantLock()
-
-
-  //TODO: Eyal, verify we got everything inited here
-  var nmClient: NMClientAsync = _
-  var allocListener: YarnRMCallbackHandler = _
-  var rmClient: AMRMClientAsync[ContainerRequest] = _
-  //val rmClient: AMRMClient[ContainerRequest] = AMRMClient.createAMRMClient()
-
-  val gson: Gson = new Gson()
+  private val gson: Gson = new Gson()
 
   def setLocalResourceFromPath(path: Path): LocalResource = {
     val stat = fs.getFileStatus(path)
@@ -141,6 +125,7 @@ class ApplicationMaster extends AMRMClientAsync.CallbackHandler with Logging {
     executorPath = Path.mergePaths(jarPath, new Path(s"/dist/executor-${this.version}-all.jar"))
     log.info("Executor jar path is {}", executorPath)
     executorJar = setLocalResourceFromPath(executorPath)
+    propFile = setLocalResourceFromPath(Path.mergePaths(jarPath, new Path("/amaterasu.properties")))
 
     log.info("Started execute")
 
@@ -150,7 +135,8 @@ class ApplicationMaster extends AMRMClientAsync.CallbackHandler with Logging {
     nmClient.init(conf)
     nmClient.start()
 
-    allocListener = new YarnRMCallbackHandler(nmClient, jobManager, env, awsEnv, config, executorJar)
+    // TODO: awsEnv currently set to empty string. should be changed to read values from (where?).
+    allocListener = new YarnRMCallbackHandler(nmClient, jobManager, env, awsEnv = "", config, executorJar)
 
     rmClient = AMRMClientAsync.createAMRMClientAsync(1000, this)
     rmClient.init(conf)
@@ -173,12 +159,7 @@ class ApplicationMaster extends AMRMClientAsync.CallbackHandler with Logging {
     this.capability.setMemory(Math.min(config.taskMem, 256))
     this.capability.setVirtualCores(1)
 
-    var completedContainers = 0
-    val version = this.getClass.getPackage.getImplementationVersion
-
     while (!jobManager.outOfActions) {
-      // this is managed by the jobManager
-      //val actionData = if (tasksToRetry.nonEmpty) tasksToRetry.poll() else jobManager.getNextActionData
       val actionData = jobManager.getNextActionData
       if (actionData != null) {
         askContainer(actionData)
@@ -219,15 +200,16 @@ class ApplicationMaster extends AMRMClientAsync.CallbackHandler with Logging {
 
         val ctx = Records.newRecord(classOf[ContainerLaunchContext])
         val command =
-            s"java -cp executor.jar:${config.YARN.spark.lib}* " +
+            s"java -cp executor.jar:${config.YARN.spark.home}/jars/* " +
             "-Dscala.usejavacp=true " +
             "org.apache.amaterasu.executor.yarn.executors.ActionsExecutorLauncher " +
-            s"'${jobManager.jobId}' '${config.master}' '${actionData.name}' '${URLEncoder.encode(gson.toJson(taskData), "UTF-8")}' '${URLEncoder.encode(gson.toJson(execData), "UTF-8")}' " //+
+            s"'${jobManager.jobId}' '${config.master}' '${actionData.name}' '${URLEncoder.encode(gson.toJson(taskData), "UTF-8")}' '${URLEncoder.encode(gson.toJson(execData), "UTF-8")}' '${actionData.id}-${container.getId.getContainerId}'"
 
         log.info("Running container id {} with command '{}'", container.getId.getContainerId, command)
         ctx.setCommands(Collections.singletonList(command))
         ctx.setLocalResources(Map[String, LocalResource](
-          "executor.jar" -> executorJar
+          "executor.jar" -> executorJar,
+          "amaterasu.properties" -> propFile
         ))
         nmClient.startContainerAsync(container, ctx)
         actionData
@@ -279,32 +261,16 @@ class ApplicationMaster extends AMRMClientAsync.CallbackHandler with Logging {
           jobManager.actionComplete(task.id)
           log.info(s"Container $containerId completed with task ${task.id} with success.")
         } else {
-
           // TODO: Check the getDiagnostics value and see if appropriate
           jobManager.actionFailed(task.id, status.getDiagnostics)
           log.warn(s"Container $containerId completed with task ${task.id} with failed status code (${status.getExitStatus}).")
-          //var failedTries = failedTasksCounter.getOrElse(task.id, 0)
-          //if (failedTries < MAX_ATTEMPTS_PER_TASK) {
-          //  log.info("Pushing task back to queue and asking another container.")
-          //  failedTasksCounter.put(task.id, failedTries + 1)
-          //  askContainer(task)
-          //} else {
-          //  log.error(s"Already tried task ${task.id} $MAX_ATTEMPTS_PER_TASK times. Time to say Bye-Bye.")
-          //  stopApplication(FinalApplicationStatus.FAILED, s"Task ${task.id} could not be completed.")
-          //}
         }
-
       }
-
     }
 
-
-    //    if (jobManager.registeredActions.size == completedContainersAndTaskIds.size) {
     if (jobManager.outOfActions) {
-
       log.info("Finished all tasks successfully! Wow!")
       stopApplication(FinalApplicationStatus.SUCCEEDED, "SUCCESS")
-
     } else {
       log.info(s"jobManager.registeredActions.size: ${jobManager.registeredActions.size}; completedContainersAndTaskIds.size: ${completedContainersAndTaskIds.size}")
     }
@@ -331,7 +297,6 @@ class ApplicationMaster extends AMRMClientAsync.CallbackHandler with Logging {
   def initJob(args: Args): Unit = {
     this.env = args.env
     this.branch = args.branch
-
     try {
       val retryPolicy = new ExponentialBackoffRetry(1000, 3)
       client = CuratorFrameworkFactory.newClient(config.zk, retryPolicy)

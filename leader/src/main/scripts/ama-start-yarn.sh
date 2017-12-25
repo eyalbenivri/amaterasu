@@ -59,7 +59,7 @@ case $i in
     JOBID="${i#*=}"
     shift # past argument=value
     ;;
-    -i=*|--report=*)
+    -p=*|--report=*)
     REPORT="${i#*=}"
     shift # past argument=value
     ;;

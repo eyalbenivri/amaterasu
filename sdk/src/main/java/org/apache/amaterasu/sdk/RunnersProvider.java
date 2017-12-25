@@ -32,7 +32,8 @@ public interface RunnersProvider {
               String jobId,
               ByteArrayOutputStream outStream,
               Notifier notifier,
-              String executorId);
+              String executorId,
+              String propFile);
 
     String getGroupIdentifier();
 

@@ -10,8 +10,7 @@ class YarnNotifier(conf: YarnConfiguration) extends Notifier with Logging {
   var rpc: YarnRPC = YarnRPC.create(conf)
 
   override def info(msg: String): Unit = {
-
-    log.error(s"""-> ${msg}""")
+    log.info(s"""-> ${msg}""")
   }
 
   override def success(line: String): Unit = {

@@ -29,7 +29,7 @@ class ActionsExecutor {
 }
 
 // launched with args:
-// ${jobManager.jobId} ${config.master} ${gson.toJson(taskData)} ${gson.toJson(execData)}
+//s"'${jobManager.jobId}' '${config.master}' '${actionData.name}' '${URLEncoder.encode(gson.toJson(taskData), "UTF-8")}' '${URLEncoder.encode(gson.toJson(execData), "UTF-8")}' '${actionData.id}-${container.getId.getContainerId}'"
 object ActionsExecutorLauncher extends App with Logging {
 
   val mapper = new ObjectMapper()
@@ -39,15 +39,11 @@ object ActionsExecutorLauncher extends App with Logging {
   val jobId = this.args(0)
   val master = this.args(1)
   val actionName = this.args(2)
-
   log.info("parsing task data")
-  log.debug(URLDecoder.decode(this.args(3), "UTF-8"))
-
   val taskData = mapper.readValue(URLDecoder.decode(this.args(3), "UTF-8"), classOf[TaskData])
-
   log.info("parsing executor data")
-  log.debug(URLDecoder.decode(this.args(4), "UTF-8"))
   val execData = mapper.readValue(URLDecoder.decode(this.args(4), "UTF-8"), classOf[ExecData])
+  val taskIdAndContainerId =  this.args(5)
 
   val actionsExecutor: ActionsExecutor = new ActionsExecutor
   actionsExecutor.master = master
@@ -61,5 +57,5 @@ object ActionsExecutorLauncher extends App with Logging {
 
   log.info("Setup notifier")
   // TODO: we need an yarn container id here. In the meantime... UUID
-  actionsExecutor.providersFactory = ProvidersFactory(execData, jobId, baos, notifier, UUID.randomUUID().toString)
+  actionsExecutor.providersFactory = ProvidersFactory(execData, jobId, baos, notifier, taskIdAndContainerId, propFile = "./amaterasu.properties")
 }

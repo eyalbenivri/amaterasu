@@ -40,7 +40,8 @@ class SparkRunnersProvider extends RunnersProvider {
   private var conf: Option[Map[String, Any]] = _
   private var executorEnv: Option[Map[String, Any]] = _
 
-  override def init(data: ExecData, jobId: String, outStream: ByteArrayOutputStream, notifier: Notifier, executorId: String): Unit = {
+  override def init(data: ExecData, jobId: String, outStream: ByteArrayOutputStream, notifier: Notifier, executorId: String,
+                    propFile: String): Unit = {
 
     var jars = Seq.empty[String]
 
@@ -54,7 +55,7 @@ class SparkRunnersProvider extends RunnersProvider {
     val sparkAppName = s"job_${jobId}_executor_$executorId"
 
     SparkRunnerHelper.notifier = notifier
-    val spark = SparkRunnerHelper.createSpark(data.env, sparkAppName, jars, conf, executorEnv)
+    val spark = SparkRunnerHelper.createSpark(data.env, sparkAppName, jars, conf, executorEnv, propFile)
 
     val sparkScalaRunner = SparkScalaRunner(data.env, jobId, spark, outStream, notifier, jars)
     sparkScalaRunner.initializeAmaContext(data.env)
