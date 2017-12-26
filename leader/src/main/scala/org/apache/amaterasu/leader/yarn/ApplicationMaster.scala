@@ -271,6 +271,7 @@ class ApplicationMaster extends AMRMClientAsync.CallbackHandler with Logging {
 
     if (jobManager.outOfActions) {
       log.info("Finished all tasks successfully! Wow!")
+      jobManager.actionsCount()
       stopApplication(FinalApplicationStatus.SUCCEEDED, "SUCCESS")
     } else {
       log.info(s"jobManager.registeredActions.size: ${jobManager.registeredActions.size}; completedContainersAndTaskIds.size: ${completedContainersAndTaskIds.size}")

@@ -2,7 +2,7 @@ package org.apache.amaterasu.executor.yarn.executors
 
 import java.io.ByteArrayOutputStream
 import java.net.URLDecoder
-import java.util.UUID
+import scala.collection.JavaConverters._
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.scala.DefaultScalaModule
@@ -13,7 +13,7 @@ import org.apache.hadoop.yarn.conf.YarnConfiguration
 import org.apache.spark.SparkContext
 
 
-class ActionsExecutor {
+class ActionsExecutor extends Logging {
 
   var master: String = _
   var sc: SparkContext = _
@@ -24,7 +24,24 @@ class ActionsExecutor {
   var providersFactory: ProvidersFactory = _
 
   def execute(): Unit = {
-
+    val runner = providersFactory.getRunner(taskData.groupId, taskData.typeId)
+    runner match {
+      case Some(r) => {
+        try {
+          r.executeSource(taskData.src, actionName, taskData.exports.asJava)
+          log.info("Completed action")
+          System.exit(0)
+        } catch  {
+          case e:Exception => {
+            log.error("Exception in execute source", e)
+            System.exit(100)
+          }
+        }
+      }
+      case None =>
+        log.error("", s"Runner not found for group: ${taskData.groupId}, type ${taskData.typeId}. Please verify the tasks")
+        System.exit(101)
+    }
   }
 }
 
@@ -58,4 +75,5 @@ object ActionsExecutorLauncher extends App with Logging {
   log.info("Setup notifier")
   // TODO: we need an yarn container id here. In the meantime... UUID
   actionsExecutor.providersFactory = ProvidersFactory(execData, jobId, baos, notifier, taskIdAndContainerId, propFile = "./amaterasu.properties")
+  actionsExecutor.execute()
 }
