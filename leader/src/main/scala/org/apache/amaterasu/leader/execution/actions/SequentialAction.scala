@@ -18,14 +18,15 @@ package org.apache.amaterasu.leader.execution.actions
 
 import java.util.concurrent.BlockingQueue
 
-import org.apache.amaterasu.common.configuration.enums.ActionStatus
 import org.apache.amaterasu.common.dataobjects.ActionData
+import org.apache.amaterasu.enums.ActionStatus
 import org.apache.curator.framework.CuratorFramework
 import org.apache.zookeeper.CreateMode
 
 import scala.collection.mutable.ListBuffer
 
 class SequentialAction extends Action {
+
   var jobId: String = _
   var jobsQueue: BlockingQueue[ActionData] = _
   var attempts: Int = 2
@@ -34,7 +35,7 @@ class SequentialAction extends Action {
   def execute(): Unit = {
 
     try {
-      log.info("Trying to add job to queue")
+
       announceQueued
       jobsQueue.add(data)
 
@@ -42,9 +43,7 @@ class SequentialAction extends Action {
     catch {
 
       //TODO: this will not invoke the error action
-      case e: Exception =>
-        log.error("Error executing action", e)
-        handleFailure(e.getMessage)
+      case e: Exception => handleFailure(e.getMessage)
 
     }
 
@@ -122,7 +121,7 @@ object ErrorAction {
     action.actionId = action.actionPath.substring(action.actionPath.indexOf('-') + 1).replace("/", "-")
 
     action.jobId = jobId
-    action.data = ActionData(ActionStatus.pending, name, src, groupId, typeId, action.actionId, Map[String, String](), new ListBuffer[String])
+    action.data = ActionData(ActionStatus.pending, name, src, groupId, typeId, action.actionId, Map.empty, new ListBuffer[String])
     action.jobsQueue = queue
     action.client = zkClient
 

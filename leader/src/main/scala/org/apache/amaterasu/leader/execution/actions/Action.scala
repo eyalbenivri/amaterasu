@@ -16,9 +16,9 @@
  */
 package org.apache.amaterasu.leader.execution.actions
 
-import org.apache.amaterasu.common.configuration.enums.ActionStatus
 import org.apache.amaterasu.common.dataobjects.ActionData
 import org.apache.amaterasu.common.logging.Logging
+import org.apache.amaterasu.enums.ActionStatus
 import org.apache.curator.framework.CuratorFramework
 
 trait Action extends Logging {
@@ -41,7 +41,6 @@ trait Action extends Logging {
 
     log.debug(s"Starting action ${data.name} of group ${data.groupId} and type ${data.typeId}")
     client.setData().forPath(actionPath, ActionStatus.started.toString.getBytes)
-    log.debug("Setting data statust")
     data.status = ActionStatus.started
   }
 

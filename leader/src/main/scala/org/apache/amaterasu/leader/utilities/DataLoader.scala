@@ -22,8 +22,9 @@ import java.nio.file.{Files, Paths}
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory
 import com.fasterxml.jackson.module.scala.DefaultScalaModule
+import org.apache.amaterasu.common.configuration.ClusterConfig
 import org.apache.amaterasu.common.dataobjects.{ActionData, ExecData, TaskData}
-import org.apache.amaterasu.common.execution.dependencies.Dependencies
+import org.apache.amaterasu.common.execution.dependencies.{Dependencies, PythonDependencies}
 import org.apache.amaterasu.common.logging.Logging
 import org.apache.amaterasu.common.runtime.Environment
 import org.yaml.snakeyaml.Yaml
@@ -54,28 +55,31 @@ object DataLoader extends Logging {
     mapper.writeValueAsBytes(getTaskData(actionData, env))
   }
 
-  def getExecutorData(env: String): ExecData = {
+  def getExecutorData(env: String, clusterConf: ClusterConfig): ExecData = {
+
     // loading the job configuration
     val envValue = Source.fromFile(s"repo/env/$env/job.yml").mkString //TODO: change this to YAML
     val envData = ymlMapper.readValue(envValue, classOf[Environment])
-
     // loading all additional configurations
     val files = new File(s"repo/env/$env/").listFiles().filter(_.isFile).filter(_.getName != "job.yml")
     val config = files.map(yamlToMap).toMap
-
     // loading the job's dependencies
     var depsData: Dependencies = null
-
+    var pyDepsData: PythonDependencies = null
     if (Files.exists(Paths.get("repo/deps/jars.yml"))) {
       val depsValue = Source.fromFile(s"repo/deps/jars.yml").mkString
       depsData = ymlMapper.readValue(depsValue, classOf[Dependencies])
     }
-
-    ExecData(envData, depsData, config)
+    if (Files.exists(Paths.get("repo/deps/python.yml"))) {
+      val pyDepsValue = Source.fromFile(s"repo/deps/python.yml").mkString
+      pyDepsData = ymlMapper.readValue(pyDepsValue, classOf[PythonDependencies])
+    }
+    val data = mapper.writeValueAsBytes(ExecData(envData, depsData, pyDepsData, config))
+    ExecData(envData, depsData, pyDepsData, config)
   }
 
-  def getExecutorDataBytes(env: String): Array[Byte] = {
-    mapper.writeValueAsBytes(getExecutorData(env))
+  def getExecutorDataBytes(env: String, clusterConf: ClusterConfig): Array[Byte] = {
+    mapper.writeValueAsBytes(getExecutorData(env, clusterConf))
   }
 
   def yamlToMap(file: File): (String, Map[String, Any]) = {

@@ -23,16 +23,19 @@ import java.util.{Collections, UUID}
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.scala.DefaultScalaModule
+
 import org.apache.amaterasu.common.configuration.ClusterConfig
-import org.apache.amaterasu.common.configuration.enums.ActionStatus
-import org.apache.amaterasu.common.configuration.enums.ActionStatus.ActionStatus
 import org.apache.amaterasu.common.dataobjects.ActionData
+import org.apache.amaterasu.common.execution.actions.{Notification, NotificationLevel, NotificationType}
 import org.apache.amaterasu.common.execution.actions.NotificationLevel.NotificationLevel
-import org.apache.amaterasu.common.execution.actions._
+import org.apache.amaterasu.enums.ActionStatus
+import org.apache.amaterasu.enums.ActionStatus.ActionStatus
 import org.apache.amaterasu.leader.execution.{JobLoader, JobManager}
 import org.apache.amaterasu.leader.utilities.{DataLoader, HttpServer}
+
 import org.apache.curator.framework.{CuratorFramework, CuratorFrameworkFactory}
 import org.apache.curator.retry.ExponentialBackoffRetry
+
 import org.apache.mesos.Protos.CommandInfo.URI
 import org.apache.mesos.Protos._
 import org.apache.mesos.protobuf.ByteString
@@ -123,7 +126,6 @@ class JobScheduler extends AmaterasuScheduler {
   }
 
   def resourceOffers(driver: SchedulerDriver, offers: util.List[Offer]): Unit = {
-
     for (offer <- offers.asScala) {
 
       if (validateOffer(offer)) {
@@ -136,9 +138,7 @@ class JobScheduler extends AmaterasuScheduler {
 
         try {
           val actionData = jobManager.getNextActionData
-
           if (actionData != null) {
-
             val taskId = Protos.TaskID.newBuilder().setValue(actionData.id).build()
 
             offersToTaskIds.put(offer.getId.getValue, taskId.getValue)
@@ -156,17 +156,12 @@ class JobScheduler extends AmaterasuScheduler {
             var executor: ExecutorInfo = null
             val slaveId = offer.getSlaveId.getValue
             slavesExecutors.synchronized {
-
               if (slavesExecutors.contains(slaveId) &&
                 offer.getExecutorIdsList.contains(slavesExecutors(slaveId).getExecutorId)) {
-
                 executor = slavesExecutors(slaveId)
               }
               else {
-
-                val execData = ByteString.copyFrom(DataLoader.getExecutorDataBytes(env))
-                //TODO: wait for Eyal's refactoring to extract the containers params
-                //val extraJavaOps = execData...
+                val execData = DataLoader.getExecutorDataBytes(env, config)
 
                 val command = CommandInfo
                   .newBuilder
@@ -183,10 +178,29 @@ class JobScheduler extends AmaterasuScheduler {
                     .setExecutable(false)
                     .setExtract(true)
                     .build())
-
+                  .addUris(URI.newBuilder()
+                    .setValue(s"http://${sys.env("AMA_NODE")}:${config.Webserver.Port}/Miniconda2-latest-Linux-x86_64.sh")
+                    .setExecutable(false)
+                    .setExtract(false)
+                    .build())
+                  .addUris(URI.newBuilder()
+                    .setValue(s"http://${sys.env("AMA_NODE")}:${config.Webserver.Port}/spark_intp.py")
+                    .setExecutable(false)
+                    .setExtract(false)
+                    .build())
+                  .addUris(URI.newBuilder()
+                    .setValue(s"http://${sys.env("AMA_NODE")}:${config.Webserver.Port}/runtime.py")
+                    .setExecutable(false)
+                    .setExtract(false)
+                    .build())
+                  .addUris(URI.newBuilder()
+                    .setValue(s"http://${sys.env("AMA_NODE")}:${config.Webserver.Port}/codegen.py")
+                    .setExecutable(false)
+                    .setExtract(false)
+                    .build())
                 executor = ExecutorInfo
                   .newBuilder
-                  .setData(execData)
+                  .setData(ByteString.copyFrom(execData))
                   .setName(taskId.getValue)
                   .setExecutorId(ExecutorID.newBuilder().setValue(taskId.getValue + "-" + UUID.randomUUID()))
                   .setCommand(command)

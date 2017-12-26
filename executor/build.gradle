@@ -68,8 +68,8 @@ dependencies {
     compile project(':amaterasu-sdk')
 
     //runtime dependency for spark
-    provided ('org.apache.spark:spark-repl_2.11:2.1.1')
-    provided ('org.apache.spark:spark-core_2.11:2.1.1')
+    compile ('org.apache.spark:spark-repl_2.11:2.1.1')
+    compile ('org.apache.spark:spark-core_2.11:2.1.1')
 
     testCompile project(':common')
     testCompile "gradle.plugin.com.github.maiflai:gradle-scalatest:0.14"
@@ -105,5 +105,7 @@ test {
 
 task copyToHome(type: Copy) {
     from 'build/libs'
+    into '../build/amaterasu/dist'
+    from 'build/resources/main'
     into '../build/amaterasu/dist'
 }

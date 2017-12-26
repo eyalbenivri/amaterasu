@@ -16,11 +16,11 @@
  */
 package org.apache.amaterasu.leader.execution
 
-import java.util.concurrent.{BlockingQueue, TimeUnit}
+import java.util.concurrent.BlockingQueue
 
-import org.apache.amaterasu.common.configuration.enums.ActionStatus
 import org.apache.amaterasu.common.dataobjects.ActionData
 import org.apache.amaterasu.common.logging.Logging
+import org.apache.amaterasu.enums.ActionStatus
 import org.apache.amaterasu.leader.execution.actions.Action
 import org.apache.curator.framework.CuratorFramework
 
@@ -49,7 +49,7 @@ class JobManager extends Logging {
     * start mast be called once and by the JobManager only
     */
   def start(): Unit = {
-    log.debug("Starting jobReport")
+
     jobReport.append(
       s"""
          | ******************************************************************
@@ -59,16 +59,13 @@ class JobManager extends Logging {
        """.stripMargin
     )
     jobReport.append("\n")
-    log.debug("Executing head")
     head.execute()
-    log.debug("Head executing")
 
   }
 
   def outOfActions: Boolean = !registeredActions.values.exists(a => a.data.status == ActionStatus.pending ||
     a.data.status == ActionStatus.queued ||
     a.data.status == ActionStatus.started)
-
   /**
     * getNextActionData returns the data of the next action to be executed if such action
     * exists
@@ -77,7 +74,7 @@ class JobManager extends Logging {
     */
   def getNextActionData: ActionData = {
 
-    val nextAction: ActionData = executionQueue.poll(200, TimeUnit.MILLISECONDS)
+    val nextAction: ActionData = executionQueue.poll()
 
     if (nextAction != null) {
       registeredActions.get(nextAction.id).get.announceStart

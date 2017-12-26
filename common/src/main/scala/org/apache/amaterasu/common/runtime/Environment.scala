@@ -16,7 +16,6 @@
  */
 package org.apache.amaterasu.common.runtime
 
-
 case class Environment() {
 
   var name: String = ""

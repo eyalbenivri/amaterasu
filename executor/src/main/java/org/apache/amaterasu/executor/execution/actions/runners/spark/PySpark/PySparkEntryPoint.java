@@ -23,6 +23,7 @@ import org.apache.spark.SparkEnv;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SQLContext;
 import org.apache.spark.SparkConf;
+import org.apache.spark.SparkContext;
 
 import org.apache.spark.sql.SparkSession;
 import py4j.GatewayServer;
@@ -55,6 +56,14 @@ public class PySparkEntryPoint {
     public static JavaSparkContext getJavaSparkContext() {
         SparkEnv.set(sparkEnv);
         return jsc;
+    }
+
+    public static String getJobId(){
+        return AmaContext.jobId();
+    }
+
+    public static Environment getEnv(){
+        return AmaContext.env();
     }
 
     public static SQLContext getSqlContext() {

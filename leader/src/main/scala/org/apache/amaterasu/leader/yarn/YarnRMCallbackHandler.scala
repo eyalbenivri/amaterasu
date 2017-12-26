@@ -101,7 +101,7 @@ class YarnRMCallbackHandler(nmClient: NMClientAsync,
 
         val actionData = jobManager.getNextActionData
         val taskData = DataLoader.getTaskData(actionData, env)
-        val execData = DataLoader.getExecutorData(env)
+        val execData = DataLoader.getExecutorData(env, config)
 
         val ctx = Records.newRecord(classOf[ContainerLaunchContext])
         val command = s"""$awsEnv env AMA_NODE=${sys.env("AMA_NODE")}

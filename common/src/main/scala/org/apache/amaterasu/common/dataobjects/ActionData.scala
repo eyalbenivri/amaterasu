@@ -1,6 +1,6 @@
 package org.apache.amaterasu.common.dataobjects
 
-import org.apache.amaterasu.common.configuration.enums.ActionStatus.ActionStatus
+import org.apache.amaterasu.enums.ActionStatus.ActionStatus
 
 import scala.collection.mutable.ListBuffer
 

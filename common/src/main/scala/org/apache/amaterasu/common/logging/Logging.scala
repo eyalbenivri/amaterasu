@@ -16,9 +16,9 @@
  */
 package org.apache.amaterasu.common.logging
 
-import org.slf4j.{Logger, LoggerFactory}
+import org.slf4j.LoggerFactory
 
 trait Logging {
-  protected lazy val log: Logger = LoggerFactory.getLogger(getClass.getName)
+  protected lazy val log = LoggerFactory.getLogger(getClass.getName)
 }
 

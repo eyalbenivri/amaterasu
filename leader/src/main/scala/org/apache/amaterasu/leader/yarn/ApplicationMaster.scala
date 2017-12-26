@@ -17,18 +17,14 @@
 package org.apache.amaterasu.leader.yarn
 
 import java.io.{File, FileInputStream, InputStream}
+import java.net.URLEncoder
 import java.util
 import java.util.Collections
-import java.util.concurrent.locks.ReentrantLock
 import java.util.concurrent.{ConcurrentHashMap, LinkedBlockingQueue}
 
 import com.google.gson.Gson
-import java.net.URLEncoder
-
 import org.apache.amaterasu.common.configuration.ClusterConfig
-import org.apache.amaterasu.common.configuration.enums.ActionStatus.ActionStatus
 import org.apache.amaterasu.common.dataobjects.ActionData
-import org.apache.amaterasu.common.execution.actions.NotificationLevel.NotificationLevel
 import org.apache.amaterasu.common.logging.Logging
 import org.apache.amaterasu.leader.execution.{JobLoader, JobManager}
 import org.apache.amaterasu.leader.utilities.{Args, DataLoader}
@@ -194,7 +190,7 @@ class ApplicationMaster extends AMRMClientAsync.CallbackHandler with Logging {
       val containerTask = Future[ActionData] {
 
         val taskData = DataLoader.getTaskData(actionData, env)
-        val execData = DataLoader.getExecutorData(env)
+        val execData = DataLoader.getExecutorData(env, config)
 
         val ctx = Records.newRecord(classOf[ContainerLaunchContext])
         val command =

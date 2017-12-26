@@ -19,5 +19,7 @@ package org.apache.amaterasu.common.execution.dependencies
 import scala.collection.mutable.ListBuffer
 
 case class Dependencies(repos: ListBuffer[Repo], artifacts: List[Artifact])
+case class PythonDependencies(packages: List[PythonPackage])
 case class Repo(id: String, `type`: String, url: String)
 case class Artifact(groupId: String, artifactId: String, version: String)
+case class PythonPackage(packageId: String, index: Option[String] = None, channel: Option[String] = None) // Not really sure about this, basically I want default values but the ObjectMapper apparently doesn't support them

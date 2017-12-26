@@ -24,7 +24,6 @@ import org.apache.amaterasu.common.logging.Logging
 import org.apache.commons.configuration.ConfigurationException
 
 import scala.collection.mutable
-import scala.collection.mutable.ListBuffer
 
 class ClusterConfig extends Logging {
 
@@ -40,8 +39,10 @@ class ClusterConfig extends Logging {
   var taskMem: Int = 128
   var distLocation: String = "local"
   var workingFolder: String = ""
-  var Jar: String = null
-  var JarName: String = null
+  // TODO: get rid of hard-coded version
+  var pysparkPath: String = "spark-2.1.1-bin-hadoop2.7/bin/spark-submit"
+  var Jar: String = _
+  var JarName: String = _
   // the additionalClassPath is currently for testing purposes, when amaterasu is
   // not packaged, there is a need to load the spark-assembly jar
   var additionalClassPath: String = ""

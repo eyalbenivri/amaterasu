@@ -27,7 +27,7 @@ import org.apache.spark.sql.SparkSession
 import org.apache.spark.util.Utils
 import org.apache.spark.{SparkConf, SparkContext}
 
-import scala.tools.nsc.GenericRunnerSettings
+import scala.tools.nsc.{GenericRunnerSettings, Settings}
 import scala.tools.nsc.interpreter.IMain
 
 object SparkRunnerHelper extends Logging {
@@ -40,9 +40,7 @@ object SparkRunnerHelper extends Logging {
   private var sparkSession: SparkSession = _
 
   var notifier: Notifier = _
-  //private var interpreter: IMain = null
 
-  //var classServerUri: String = null
   private var interpreter: IMain = _
 
   def getNode: String = sys.env.get("AMA_NODE") match {
@@ -64,10 +62,8 @@ object SparkRunnerHelper extends Logging {
   private def initInterpreter(outStream: ByteArrayOutputStream, jars: Seq[String]) = {
 
     var result: IMain = null
-    //var classServerUri: String = null
     val config = new ClusterConfig()
     try {
-      //val command = new SparkCommandLine(List())
 
       val interpArguments = List(
         "-Yrepl-class-based",
@@ -84,7 +80,6 @@ object SparkRunnerHelper extends Logging {
 
       settings.usejavacp.value = true
 
-      //val in: Option[BufferedReader] = null
       val out = new PrintWriter(outStream)
       val interpreter = new AmaSparkILoop(out)
       interpreter.setSttings(settings)
@@ -124,6 +119,7 @@ object SparkRunnerHelper extends Logging {
       .set("spark.submit.deployMode", "client")
       .set("spark.hadoop.validateOutputSpecs", "false")
       .set("spark.logConf", "true")
+      .set("spark.submit.pyFiles", "miniconda/pkgs")
       .setJars(jars)
 
 
@@ -174,7 +170,7 @@ object SparkRunnerHelper extends Logging {
     }
 
     conf.set("spark.repl.class.outputDir", outputDir.getAbsolutePath)
-    log.info(s"Spark session initializing. Conf spark home is: ${conf.get("spark.home")}; spark.yarn.jars is: ${conf.get("spark.yarn.jars")}")
+
     sparkSession = SparkSession.builder
       .appName(sparkAppName)
       .master(env.master)
