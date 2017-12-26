@@ -123,6 +123,7 @@ object SparkRunnerHelper extends Logging {
       .set("spark.driver.host", getNode)
       .set("spark.submit.deployMode", "client")
       .set("spark.hadoop.validateOutputSpecs", "false")
+      .set("spark.logConf", "true")
       .setJars(jars)
 
 
@@ -134,8 +135,12 @@ object SparkRunnerHelper extends Logging {
       case "yarn" =>
         conf.set("spark.home", config.YARN.spark.home)
             .set("spark.master", "yarn")
+            .set("spark.executor.instances", "1")
             .set("spark.yarn.jars", s"${config.YARN.spark.home}/jars/*")
-            .set("spark.executor.memory", "512mb")
+            .set("spark.executor.memory", "512m")
+            .set("spark.dynamicAllocation.enabled", "false")
+            .set("spark.shuffle.service.enabled", "true")
+            .set("spark.eventLog.enabled", "false")
       case _ => throw new Exception(s"mode ${config.mode} is not legal.")
     }
 
